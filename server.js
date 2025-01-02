@@ -146,6 +146,117 @@ app.get('/average-health-metrics', async (req, res) => {
   }
 });
 
+// Endpoint to get user profile
+app.get('/get-user-profile', async (req, res) => {
+  try {
+    const { userID } = req.query;
+
+    // Validate input
+    if (!userID) {
+      return res.status(400).json({ error: 'Missing required parameters: userID' });
+    }
+
+    
+
+
+    const [results] = await pool.execute(
+      `SELECT 
+        UserID as userId ,DateOfBirth as dateOfBirth, Sex as sex
+      FROM users u
+      WHERE 
+        u.UserID = ?`,
+      [userID]
+    );
+
+    res.json(results[0]);
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    res.status(500).json({ error: 'An error occurred while fetching profile' });
+  }
+});
+
+// Endpoint to get user health data
+app.get('/get-health-data', async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    // Validate input
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing required parameters: userId' });
+    }
+
+    
+
+
+    const [results] = await pool.execute(
+      `SELECT 
+        UserID, 
+		Weight as weight, 
+		BloodPressureSystolic as bloodPressureSystolic, 
+		BloodPressureDiastolic as bloodPressureDiastolic, 
+		FastingBloodGlucose as fastingBloodGlucose, 
+		HDLCholesterol as hdlCholesterol, 
+		Triglycerides as triglycerides, 
+		CreatedAt as lastUpdate, 
+		height, 
+		waistCircumference, 
+		vitaminD2, 
+		vitaminD3
+      FROM health_data hd
+      WHERE 
+        UserID = ? ORDER BY CreatedAt Desc limit 1`,
+      [userId]
+    );
+	
+
+    res.json(results[0]);
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    res.status(500).json({ error: 'An error occurred while fetching data' });
+  }
+});
+
+// Endpoint to get user health data history
+app.get('/get-health-history', async (req, res) => {
+  try {
+    const { userId , parameter } = req.query;
+
+    // Validate input
+    if (!userId || !parameter ) {
+      return res.status(400).json({ error: 'Missing required parameters: userId or parameter' });
+    }
+
+    
+
+
+    const [results] = await pool.execute(
+      `SELECT 
+        UserID, 
+		Weight as weight, 
+		BloodPressureSystolic as bloodPressureSystolic, 
+		BloodPressureDiastolic as bloodPressureDiastolic, 
+		FastingBloodGlucose as fastingBloodGlucose, 
+		HDLCholesterol as hdlCholesterol, 
+		Triglycerides as triglycerides, 
+		CreatedAt as date, 
+		height, 
+		waistCircumference, 
+		vitaminD2, 
+		vitaminD3
+      FROM health_data hd
+      WHERE 
+        UserID = ? `,
+      [userId]
+    );
+	
+
+    res.json(results);
+  } catch (error) {
+    console.error('Error fetching history data:', error);
+    res.status(500).json({ error: 'An error occurred while fetching history data' });
+  }
+});
+
 // Serve HTML form
 app.get('/', (req, res) => {
   res.sendFile(new URL('./index.html', import.meta.url).pathname);
