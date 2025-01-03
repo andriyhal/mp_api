@@ -2,16 +2,29 @@ import express from 'express';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import bodyParser from 'body-parser';
+import OpenAI from 'openai';
+
+
+
+
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Initialize OpenAI API
+const openai = new OpenAI({
+     apiKey: process.env.OPENAI_API_X_API_KEY // This is also the default, can be omitted
+});
+
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
+app.use(bodyParser.json());
 
 // MySQL connection
 const pool = mysql.createPool({
@@ -254,6 +267,64 @@ app.get('/get-health-history', async (req, res) => {
   } catch (error) {
     console.error('Error fetching history data:', error);
     res.status(500).json({ error: 'An error occurred while fetching history data' });
+  }
+});
+
+// Route to handle health score submission
+app.get('/calc-health-score', async (req, res) => {
+  try {
+    const { userId  } = req.query;
+
+    // Validate input
+    if (!userId  ) {
+      return res.status(400).json({ error: 'Missing required parameters: userId' });
+    }
+
+	
+	//const userId = 'test@example.com';
+	
+    const [results] = await pool.execute(
+      `SELECT 
+        UserID, 
+		Weight as weight, 
+		BloodPressureSystolic as bloodPressureSystolic, 
+		BloodPressureDiastolic as bloodPressureDiastolic, 
+		FastingBloodGlucose as fastingBloodGlucose, 
+		HDLCholesterol as hdlCholesterol, 
+		Triglycerides as triglycerides, 
+		CreatedAt as lastUpdate, 
+		height, 
+		waistCircumference, 
+		vitaminD2, 
+		vitaminD3
+      FROM health_data hd
+      WHERE 
+        UserID = ? ORDER BY CreatedAt Desc limit 1`,
+      [userId]
+    );
+	
+	//console.log(results);
+	
+  const messages = 'Give me a json response in the format {score: <50> , description: <description> , lastUpdate: <lastUpdate>} in percentage based on the following parameters:  ' + JSON.stringify(results);
+
+
+
+    // Call OpenAI API
+    const chatCompletion = await openai.chat.completions.create({
+	  model: "gpt-3.5-turbo",
+	  messages: [{"role": "user", "content": messages}],
+	});
+	//console.log(chatCompletion.choices[0].message);
+
+    // Send OpenAI's response back to the client
+    res.json(chatCompletion.choices[0].message.content)
+    
+
+	
+    
+  } catch (error) {
+    console.error('Error calculating health score:', error);
+    res.status(500).json({ error: 'An error occurred while calculating health score' });
   }
 });
 
