@@ -80,6 +80,18 @@
         <button type="submit">Get Averages</button>
     </form>
 
+    <h1>Import File</h1>
+    <form id="fileUploadForm" enctype="multipart/form-data">
+        <label for="fileUploadUserID">User ID:</label>
+        <input type="text" id="fileUploadUserID" name="UserID" required><br><br>
+
+        <label for="file">File:</label>
+        <input type="file" id="file" name="file" accept=".csv,.xlsx,.xls,.pdf,.jpg,.jpeg,.png" required><br><br>
+
+        <button type="submit">Upload File</button>
+    </form>
+
+    <div id="uploadResult"></div>
     <div id="results"></div>
 
     <script>
@@ -147,13 +159,13 @@
                 if (response.ok) {
                     document.getElementById('results').innerHTML = `
                         <h3>Average Health Metrics:</h3>
-                        <p>Systolic Blood Pressure: ${data.avgSystolic.toFixed(2)}</p>
-                        <p>Diastolic Blood Pressure: ${data.avgDiastolic.toFixed(2)}</p>
-                        <p>Fasting Blood Glucose: ${data.avgGlucose.toFixed(2)} mg/dL</p>
-                        <p>HDL Cholesterol: ${data.avgHDL.toFixed(2)} mg/dL</p>
-                        <p>Triglycerides: ${data.avgTriglycerides.toFixed(2)} mg/dL</p>
-                        <p>Vitamin D2: ${data.avgVitaminD2.toFixed(2)} ng/mL</p>
-                        <p>Vitamin D3: ${data.avgVitaminD3.toFixed(2)} ng/mL</p>
+                        <p>Systolic Blood Pressure: ${data.avgSystolic}</p>
+                        <p>Diastolic Blood Pressure: ${data.avgDiastolic}</p>
+                        <p>Fasting Blood Glucose: ${data.avgGlucose} mg/dL</p>
+                        <p>HDL Cholesterol: ${data.avgHDL} mg/dL</p>
+                        <p>Triglycerides: ${data.avgTriglycerides} mg/dL</p>
+                        <p>Vitamin D2: ${data.avgVitaminD2} ng/mL</p>
+                        <p>Vitamin D3: ${data.avgVitaminD3} ng/mL</p>
                     `;
                 } else {
                     document.getElementById('results').innerHTML = `<p>Error: ${data.error}</p>`;
@@ -161,6 +173,38 @@
             } catch (error) {
                 console.error('Error:', error);
                 document.getElementById('results').innerHTML = '<p>An error occurred while fetching data.</p>';
+            }
+        });
+
+        document.getElementById('fileUploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+
+            try {
+                const response = await fetch('/import-file', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    let resultHTML = `
+                        <p>File uploaded successfully!</p>
+                        <p>File saved to: ${data.filePath}</p>
+                    `;
+                    if (data.ocrText) {
+                        resultHTML += `
+                            <p>OCR Text Preview:</p>
+                            <pre>${data.ocrText}</pre>
+                        `;
+                    }
+                    document.getElementById('uploadResult').innerHTML = resultHTML;
+                } else {
+                    document.getElementById('uploadResult').innerHTML = `<p>Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('uploadResult').innerHTML = '<p>An error occurred while uploading the file.</p>';
             }
         });
     </script>
