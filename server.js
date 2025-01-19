@@ -396,16 +396,55 @@ app.post('/import-file', upload.single('file'), async (req, res) => {
 		`INSERT INTO data_upload (UserID, filename, data, file_type, file_path, ocr_text) VALUES (?, ?, ?, ?, ?, ?)`,
 		[UserID, originalname, base64Data, fileType.ext, filePath, ocrText]
 	  );
+	  
+	  //perform data extraction using ai - TODO
+	  
+	  let json_results = `{
+  "Collection Date": "24/06/2023 08:49 PM",
+  "Report Date": "24/06/2023 09:02 PM",
+  "Total Cholesterol": 156,
+  "Triglycerides level": 150,
+  "HDL Cholesterol": 45,
+  "LDL Cholesterol": 81.00,
+  "VLDL Cholesterol": 30.00,
+  "LDL/HDL RATIO": 1.80,
+  "Total Cholesterol/HDL RATIO": 3.47
+	}`;
   
 	  res.status(201).json({ 
 		message: 'File uploaded successfully', 
 		id: result.insertId, 
 		filePath,
-		ocrText: ocrText ? ocrText.substring(0, 100) + '...' : null // Send a preview of OCR text
+		//ocrText: ocrText ? ocrText.substring(0, 100) + '...' : null // Send a preview of OCR text
+		ocrText: json_results ? json_results : null //return results
 	  });
 	} catch (error) {
 	  console.error('Error uploading file:', error);
 	  res.status(500).json({ error: 'An error occurred while uploading the file' });
+	}
+  });
+
+// Endpoint to get all uploaded files for a given UserID (now using POST)
+app.post('/get-data-files', async (req, res) => {
+	try {
+	  const { UserID } = req.body;
+  
+	  if (!UserID) {
+		return res.status(400).json({ error: 'UserID is required' });
+	  }
+  
+	  const [results] = await pool.execute(
+		`SELECT id, filename AS fileName, file_type as fileType, uploaded_at as uploadDate 
+		 FROM data_upload 
+		 WHERE UserID = ? 
+		 ORDER BY uploaded_at DESC`,
+		[UserID]
+	  );
+  
+	  res.json(results);
+	} catch (error) {
+	  console.error('Error fetching data files:', error);
+	  res.status(500).json({ error: 'An error occurred while fetching data files' });
 	}
   });
 
