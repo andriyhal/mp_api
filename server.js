@@ -375,7 +375,7 @@ app.post('/import-file', upload.single('file'), async (req, res) => {
   
 	  const fileType = await fileTypeFromBuffer(buffer);
 	  if (!fileType || !['csv', 'xlsx', 'xls', 'pdf', 'jpg', 'jpeg', 'png'].includes(fileType.ext)) {
-		return res.status(400).json({ error: 'Invalid file type. Only CSV, Excel, PDF, JPG, and PNG files are allowed.' });
+		return res.status(400).json({ error: 'Invalid file type. Only CSV, Excel, PDF, JPG and PNG files are allowed.' });
 	  }
   
 	  // Generate a unique filename
@@ -400,16 +400,35 @@ app.post('/import-file', upload.single('file'), async (req, res) => {
 	  //perform data extraction using ai - TODO
 	  
 	  let json_results = `{
-  "Collection Date": "24/06/2023 08:49 PM",
-  "Report Date": "24/06/2023 09:02 PM",
-  "Total Cholesterol": 156,
-  "Triglycerides level": 150,
-  "HDL Cholesterol": 45,
-  "LDL Cholesterol": 81.00,
-  "VLDL Cholesterol": 30.00,
-  "LDL/HDL RATIO": 1.80,
-  "Total Cholesterol/HDL RATIO": 3.47
-	}`;
+  "Collection Date": "June 24, 2023, 08:49 PM",
+  "Report Date": "June 24, 2023, 09:02 PM",
+  "Total Cholesterol": {
+    "Value": 156,
+    "Unit": "mg/dL",
+    "Reference Range": "0-200 mg/dL"
+  },
+  "Triglycerides": {
+    "Value": 150,
+    "Unit": "mg/dL",
+    "Reference Range": "0-170 mg/dL"
+  },
+  "HDL Cholesterol": {
+    "Value": 45,
+    "Unit": "mg/dL",
+    "Reference Range": "40-70 mg/dL"
+  },
+  "LDL Cholesterol": {
+    "Value": 81.00,
+    "Unit": "mg/dL",
+    "Reference Range": "0-100 mg/dL"
+  },
+  "VLDL Cholesterol": {
+    "Value": 30.00,
+    "Unit": "mg/dL",
+    "Reference Range": "6-38 mg/dL"
+  }
+}
+`;
   
 	  res.status(201).json({ 
 		message: 'File uploaded successfully', 
