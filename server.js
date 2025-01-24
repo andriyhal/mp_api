@@ -10,12 +10,14 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { createWorker } from 'tesseract.js';
-
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+
 
 // Initialize OpenAI API
 const openai = new OpenAI({
@@ -464,6 +466,74 @@ app.post('/get-data-files', async (req, res) => {
 	} catch (error) {
 	  console.error('Error fetching data files:', error);
 	  res.status(500).json({ error: 'An error occurred while fetching data files' });
+	}
+  });
+
+  // Login handler
+app.post('/auth/login', async (req, res) => {
+	try {
+		const { email, password } = req.body;
+	
+		if (!email) {
+		  return res.status(400).json({ error: 'email is required' });
+		}
+	
+		const [results] = await pool.execute(
+		  `SELECT 
+			UserID as userId ,DateOfBirth as dateOfBirth, Sex as sex
+			FROM users u
+			WHERE 
+			u.UserID = ?`,
+			[email]
+		);
+	
+		//res.json(results);
+		console.log(results[0].userId)
+
+		
+
+		// Validate user credentials (e.g., check against the database)
+		// use the following data for testing
+		const user = {id : results[0].userId , password : 'pass' , name : 'John Doe' , email : email};
+
+		if (!user || user.password !== password) {
+		return res.status(401).json({ message: 'Invalid credentials' });
+		}
+	
+		// Generate a token
+		const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
+		expiresIn: '1h', // Token expiration
+		});
+	
+		res.json({
+		token,
+		user: { id: user.id, email: user.email, name: user.name },
+		});
+
+	  } catch (error) {
+		console.error('Error authentication:', error);
+		res.status(500).json({ error: 'An error occurred while fauthenticating' });
+	  }
+	
+  
+	
+  });
+
+  app.post('/auth/refresh', (req, res) => {
+	const { token } = req.body;
+  
+	try {
+	  // Verify the current token
+	  const payload = jwt.verify(token, process.env.JWT_SECRET);
+  
+	  // Generate a new token
+	  const newToken = jwt.sign({ id: payload.id, email: payload.email }, process.env.JWT_SECRET, {
+		expiresIn: '1h',
+	  });
+  
+	  res.json({ newToken });
+	} catch (error) {
+	  res.status(401).json({ message: 'Invalid or expired token' });
 	}
   });
 
