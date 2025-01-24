@@ -24,43 +24,52 @@
         <button type="submit">Register User</button>
     </form>
 
-    <h1>Health Data Form</h1>
-    <form id="healthDataForm">
-        <label for="HealthUserID">User ID:</label>
-        <input type="text" id="HealthUserID" name="UserID" required><br><br>
+    <h1>User Login</h1>
+    <form id="loginForm">
+        <label for="loginUserID">User ID:</label>
+        <input type="text" id="loginUserID" name="UserID" required><br><br>
 
-        <label for="height">Height (cm):</label>
-        <input type="number" id="height" name="height" step="0.1" required><br><br>
+        <label for="loginPassword">Password:</label>
+        <input type="password" id="loginPassword" name="password" required><br><br>
 
-        <label for="weight">Weight (kg):</label>
-        <input type="number" id="weight" name="weight" step="0.1" required><br><br>
-
-        <label for="waistCircumference">Waist Circumference (inches):</label>
-        <input type="number" id="waistCircumference" name="waistCircumference" step="0.1" required><br><br>
-
-        <label for="bloodPressureSystolic">Blood Pressure (Systolic):</label>
-        <input type="number" id="bloodPressureSystolic" name="bloodPressureSystolic" required><br><br>
-
-        <label for="bloodPressureDiastolic">Blood Pressure (Diastolic):</label>
-        <input type="number" id="bloodPressureDiastolic" name="bloodPressureDiastolic" required><br><br>
-
-        <label for="fastingBloodGlucose">Fasting Blood Glucose (mg/dL):</label>
-        <input type="number" id="fastingBloodGlucose" name="fastingBloodGlucose" required><br><br>
-
-        <label for="hdlCholesterol">HDL Cholesterol (mg/dL):</label>
-        <input type="number" id="hdlCholesterol" name="hdlCholesterol" required><br><br>
-
-        <label for="triglycerides">Triglycerides (mg/dL):</label>
-        <input type="number" id="triglycerides" name="triglycerides" required><br><br>
-
-        <label for="vitaminD2">VitaminD2 (ng/mL):</label>
-        <input type="number" id="vitaminD2" name="vitaminD2" step="0.1" required><br><br>
-
-        <label for="vitaminD3">Vitamin D3 (ng/mL):</label>
-        <input type="number" id="vitaminD3" name="vitaminD3" step="0.1" required><br><br>
-
-        <button type="submit">Submit Health Data</button>
+        <button type="submit">Login</button>
     </form>
+
+    <div id="loggedInContent" style="display: none;">
+        <h1>Health Data Form</h1>
+        <form id="healthDataForm">
+            <label for="height">Height (cm):</label>
+            <input type="number" id="height" name="height" step="0.1" required><br><br>
+
+            <label for="weight">Weight (kg):</label>
+            <input type="number" id="weight" name="weight" step="0.1" required><br><br>
+
+            <label for="waistCircumference">Waist Circumference (inches):</label>
+            <input type="number" id="waistCircumference" name="waistCircumference" step="0.1" required><br><br>
+
+            <label for="bloodPressureSystolic">Blood Pressure (Systolic):</label>
+            <input type="number" id="bloodPressureSystolic" name="bloodPressureSystolic" required><br><br>
+
+            <label for="bloodPressureDiastolic">Blood Pressure (Diastolic):</label>
+            <input type="number" id="bloodPressureDiastolic" name="bloodPressureDiastolic" required><br><br>
+
+            <label for="fastingBloodGlucose">Fasting Blood Glucose (mg/dL):</label>
+            <input type="number" id="fastingBloodGlucose" name="fastingBloodGlucose" required><br><br>
+
+            <label for="hdlCholesterol">HDL Cholesterol (mg/dL):</label>
+            <input type="number" id="hdlCholesterol" name="hdlCholesterol" required><br><br>
+
+            <label for="triglycerides">Triglycerides (mg/dL):</label>
+            <input type="number" id="triglycerides" name="triglycerides" required><br><br>
+
+            <label for="vitaminD2">VitaminD2 (ng/mL):</label>
+            <input type="number" id="vitaminD2" name="vitaminD2" step="0.1" required><br><br>
+
+            <label for="vitaminD3">Vitamin D3 (ng/mL):</label>
+            <input type="number" id="vitaminD3" name="vitaminD3" step="0.1" required><br><br>
+
+            <button type="submit">Submit Health Data</button>
+        </form>
 
     <h2>Get Average Health Metrics</h2>
     <form id="averageMetricsForm">
@@ -103,6 +112,50 @@
     <div id="dataFilesResult"></div>
 
     <script>
+
+let token = localStorage.getItem('token');
+
+function updateUI() {
+    const loggedInContent = document.getElementById('loggedInContent');
+    if (token) {
+        loggedInContent.style.display = 'block';
+    } else {
+        loggedInContent.style.display = 'none';
+    }
+}
+
+updateUI();
+
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const loginData = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(loginData),
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    token = data.token;
+                    localStorage.setItem('token', token);
+                    alert('Login successful!');
+                    updateUI();
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred during login.');
+            }
+        });
+
         document.getElementById('userRegistrationForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -139,6 +192,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify(healthData),
                 });
@@ -161,19 +215,23 @@
             const queryParams = new URLSearchParams(formData);
 
             try {
-                const response = await fetch(`/average-health-metrics?${queryParams}`);
+                const response = await fetch(`/average-health-metrics?${queryParams}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
                 const data = await response.json();
                 
                 if (response.ok) {
                     document.getElementById('results').innerHTML = `
                         <h3>Average Health Metrics:</h3>
-                        <p>Systolic Blood Pressure: ${data.avgSystolic}</p>
-                        <p>Diastolic Blood Pressure: ${data.avgDiastolic}</p>
-                        <p>Fasting Blood Glucose: ${data.avgGlucose} mg/dL</p>
-                        <p>HDL Cholesterol: ${data.avgHDL} mg/dL</p>
-                        <p>Triglycerides: ${data.avgTriglycerides} mg/dL</p>
-                        <p>Vitamin D2: ${data.avgVitaminD2} ng/mL</p>
-                        <p>Vitamin D3: ${data.avgVitaminD3} ng/mL</p>
+                        <p>Systolic Blood Pressure: ${data.avgSystolic.toFixed(2)}</p>
+                        <p>Diastolic Blood Pressure: ${data.avgDiastolic.toFixed(2)}</p>
+                        <p>Fasting Blood Glucose: ${data.avgGlucose.toFixed(2)} mg/dL</p>
+                        <p>HDL Cholesterol: ${data.avgHDL.toFixed(2)} mg/dL</p>
+                        <p>Triglycerides: ${data.avgTriglycerides.toFixed(2)} mg/dL</p>
+                        <p>Vitamin D2: ${data.avgVitaminD2.toFixed(2)} ng/mL</p>
+                        <p>Vitamin D3: ${data.avgVitaminD3.toFixed(2)} ng/mL</p>
                     `;
                 } else {
                     document.getElementById('results').innerHTML = `<p>Error: ${data.error}</p>`;
@@ -187,15 +245,14 @@
         document.getElementById('fileUploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
-            const userData = Object.fromEntries(formData);
 
             try {
-                const response = await fetch('/get-data-files', {
+                const response = await fetch('/import-file', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify(userData),
+                    body: formData,
                 });
                 const data = await response.json();
                 
@@ -222,13 +279,17 @@
 
         document.getElementById('getDataFilesForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const formData = new FormData(e.target);
-            const queryParams = new URLSearchParams(formData);
 
             try {
-                const response = await fetch(`/get-data-files?${queryParams}`);
+                const response = await fetch('/get-data-files', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                });
                 const data = await response.json();
-                
+        
                 if (response.ok) {
                     let resultHTML = '<h3>User Data Files:</h3>';
                     if (data.length === 0) {

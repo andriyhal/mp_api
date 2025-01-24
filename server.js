@@ -11,6 +11,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { createWorker } from 'tesseract.js';
 import jwt from 'jsonwebtoken';
+import bcrypt from "bcrypt";
 
 dotenv.config();
 
@@ -45,6 +46,23 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 app.use(bodyParser.json());
 
+// Middleware to verify JWT
+const verifyToken = (req, res, next) => {
+  const token = req.headers["authorization"]?.split(" ")[1]
+
+  if (!token) {
+    return res.status(403).json({ error: "No token provided" })
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).json({ error: "Unauthorized" })
+    }
+    req.userId = decoded.id
+    next()
+  })
+}
+
 // MySQL connection
 const pool = mysql.createPool({
 	host: process.env.DB_HOST,
@@ -57,21 +75,39 @@ const pool = mysql.createPool({
 });
 
 // Route to handle user registration
-app.post('/register-user', async (req, res) => {
+app.post("/register-user", async (req, res) => {
 	try {
-		const { UserID, Sex, DateOfBirth } = req.body;
-		
-		const [result] = await pool.execute(
-			`INSERT INTO users (UserID, Sex, DateOfBirth) VALUES (?, ?, ?)`,
-			[UserID, Sex, DateOfBirth]
-		);
-		
-		res.status(201).json({ message: 'User registered successfully', id: result.insertId });
-		} catch (error) {
-		console.error('Error registering user:', error);
-		res.status(500).json({ error: 'An error occurred while registering user' });
+	  const { email, name, password } = req.body
+
+	  //{"name":"Tester","email":"test@example.com","password":"password","confirmPassword":"password"}
+  
+	  if (!email || !name || !password ) {
+		return res.status(400).json({ error: "All fields are required" })
+	  }
+  
+	  // Check for duplicate email
+	  const [duplicateCheck] = await pool.execute(
+		`SELECT * FROM users WHERE UserID = ?`,
+		[email],
+	  );
+  
+	  if (duplicateCheck.length > 0) {
+		return res.status(409).json({ error: "Email already exists" });
+	  }
+  
+	  const hashedPassword = await bcrypt.hash(password, 10)
+  
+	  const [result] = await pool.execute(
+		`INSERT INTO users (UserID, name, password) VALUES (?, ?, ?)`,
+		[email, name, hashedPassword],
+	  )
+  
+	  res.status(201).json({ message: "User registered successfully", id: result.insertId })
+	} catch (error) {
+	  console.error("Error registering user:", error)
+	  res.status(500).json({ error: "An error occurred while registering user" })
 	}
-});
+  })
 
 app.post('/edit-user', async (req, res) => {
 	try {
@@ -99,7 +135,7 @@ app.post('/edit-user', async (req, res) => {
 });
 
 // Route to handle health data submission
-app.post('/submit-health-data', async (req, res) => {
+app.post('/submit-health-data' , verifyToken, async (req, res) => {
 	try {
 		const {
 			UserID,
@@ -132,7 +168,7 @@ app.post('/submit-health-data', async (req, res) => {
 });
 
 // Endpoint to get average health metrics
-app.get('/average-health-metrics', async (req, res) => {
+app.get('/average-health-metrics', verifyToken , async (req, res) => {
 	try {
 		const { age, sex, weight } = req.query;
 		
@@ -179,7 +215,7 @@ app.get('/average-health-metrics', async (req, res) => {
 });
 
 // Endpoint to get user profile
-app.get('/get-user-profile', async (req, res) => {
+app.get('/get-user-profile', verifyToken, async (req, res) => {
 	try {
 		const { userID } = req.query;
 		
@@ -208,7 +244,7 @@ app.get('/get-user-profile', async (req, res) => {
 });
 
 // Endpoint to get user health data
-app.get('/get-health-data', async (req, res) => {
+app.get('/get-health-data', verifyToken, async (req, res) => {
 	try {
 		const { userId } = req.query;
 		
@@ -249,7 +285,7 @@ app.get('/get-health-data', async (req, res) => {
 });
 
 // Endpoint to get user health data history
-app.get('/get-health-history', async (req, res) => {
+app.get('/get-health-history', verifyToken, async (req, res) => {
 	try {
 		const { userId , parameter } = req.query;
 		
@@ -290,7 +326,7 @@ app.get('/get-health-history', async (req, res) => {
 });
 
 // Route to handle health score submission
-app.get('/calc-health-score', async (req, res) => {
+app.get('/calc-health-score', verifyToken, async (req, res) => {
 	try {
 		const { userId  } = req.query;
 		
@@ -362,7 +398,7 @@ async function performOCR(filePath) {
 	return text;
   }
   
-app.post('/import-file', upload.single('file'), async (req, res) => {
+app.post('/import-file', verifyToken, upload.single('file'), async (req, res) => {
 	try {
 	  if (!req.file) {
 		return res.status(400).json({ error: 'No file uploaded' });
@@ -446,7 +482,7 @@ app.post('/import-file', upload.single('file'), async (req, res) => {
   });
 
 // Endpoint to get all uploaded files for a given UserID (now using POST)
-app.post('/get-data-files', async (req, res) => {
+app.post('/get-data-files', verifyToken, async (req, res) => {
 	try {
 	  const { UserID } = req.body;
   
@@ -474,45 +510,81 @@ app.post('/auth/login', async (req, res) => {
 	try {
 		const { email, password } = req.body;
 	
-		if (!email) {
-		  return res.status(400).json({ error: 'email is required' });
+		if (!email || !password) {
+		  return res.status(401).json({ error: 'email and password is required' });
 		}
+
+		const UserID = email;
 	
 		const [results] = await pool.execute(
 		  `SELECT 
-			UserID as userId ,DateOfBirth as dateOfBirth, Sex as sex
+			*
 			FROM users u
 			WHERE 
 			u.UserID = ?`,
-			[email]
+			[UserID]
 		);
+
+		if (results.length === 0) {
+			return res.status(401).json({ error: "Invalid credentials" })
+		  }
 	
 		//res.json(results);
-		console.log(results[0].userId)
+		console.log(results[0].UserID)
 
 		
 
 		// Validate user credentials (e.g., check against the database)
 		// use the following data for testing
-		const user = {id : results[0].userId , password : 'pass' , name : 'John Doe' , email : email};
+		
+		//const user = {id : results[0].userId , password : 'pass' , name : 'John Doe' , email : email};
 
-		if (!user || user.password !== password) {
-		return res.status(401).json({ message: 'Invalid credentials' });
-		}
+		const user = results[0]
+
+		  // Check if account is locked
+		  if (user.login_attempts >= 5 && user.last_login_attempt > Date.now() - 15 * 60 * 1000) {
+			return res.status(403).json({ error: "Account is locked. Please try again later." })
+		  }
+
+		  console.log(password, user.password)
+	  
+		  const isPasswordValid = await bcrypt.compare(password, user.password)
+	  
+		  if (!isPasswordValid) {
+			// Increment login attempts
+			await pool.execute(
+			  "UPDATE users SET login_attempts = login_attempts + 1, last_login_attempt = CURRENT_TIMESTAMP WHERE UserID = ?",
+			  [UserID],
+			)
+	  
+			// Log failed login attempt
+			await pool.execute("INSERT INTO login_history (UserID, success) VALUES (?, ?)", [UserID, false])
+	  
+			return res.status(401).json({ error: "Invalid credentials" })
+		  }
+	  
+		  // Reset login attempts on successful login
+		  await pool.execute("UPDATE users SET login_attempts = 0, last_login_attempt = CURRENT_TIMESTAMP WHERE UserID = ?", [
+			UserID,
+		  ])
+	  
+		  // Log successful login attempt
+		  await pool.execute("INSERT INTO login_history (UserID, success) VALUES (?, ?)", [UserID, true])
+	  
 	
 		// Generate a token
-		const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
+		const token = jwt.sign({ id: user.UserID, email: user.UserID }, process.env.JWT_SECRET, {
 		expiresIn: '1h', // Token expiration
 		});
 	
 		res.json({
 		token,
-		user: { id: user.id, email: user.email, name: user.name },
+		user: { id: user.UserID, email: user.UserID, name: user.name },
 		});
 
 	  } catch (error) {
 		console.error('Error authentication:', error);
-		res.status(500).json({ error: 'An error occurred while fauthenticating' });
+		res.status(500).json({ error: 'An error occurred while authenticating' });
 	  }
 	
   
