@@ -170,12 +170,43 @@ app.post('/submit-health-data' , verifyToken, async (req, res) => {
 // Endpoint to get average health metrics
 app.get('/average-health-metrics', verifyToken , async (req, res) => {
 	try {
-		const { age, sex, weight } = req.query;
+		var { age, sex, weight } = req.query;
+		
+		
 		
 		// Validate input
 		if (!age || !sex || !weight) {
-			return res.status(400).json({ error: 'Missing required parameters: age, sex, and weight' });
+
+			const decodedToken = jwt.verify(req.headers['authorization'].split(' ')[1], process.env.JWT_SECRET);
+			const userId = decodedToken.email;
+
+			if (!age || !sex) {
+				const [userResults] = await pool.execute(
+					`SELECT DateOfBirth, Sex FROM users WHERE UserID = ?`,
+					[userId]
+				);
+				if (userResults.length > 0) {
+					const user = userResults[0];
+					if (!age) {
+						age = new Date().getFullYear() - new Date(user.DateOfBirth).getFullYear();
+					}
+					if (!sex) {
+						sex = user.Sex;
+					}
+				}
+			}
+			if (!weight) {
+				const [weightResults] = await pool.execute(
+					`SELECT weight FROM health_data WHERE UserID = ? ORDER BY CreatedAt DESC LIMIT 1`,
+					[userId]
+				);
+				if (weightResults.length > 0) {
+					weight = weightResults[0].weight;
+				}
+			}
 		}
+
+		
 		
 		// Convert age and weight to numbers and apply some basic validation
 		const ageNum = parseInt(age , 10);
@@ -191,13 +222,13 @@ app.get('/average-health-metrics', verifyToken , async (req, res) => {
 		
 		const [results] = await pool.execute(
 			`SELECT 
-			AVG(hd.bloodPressureSystolic) as avgSystolic,
-			AVG(hd.bloodPressureDiastolic) as avgDiastolic,
-			AVG(hd.fastingBloodGlucose) as avgGlucose,
-			AVG(hd.hdlCholesterol) as avgHDL,
-			AVG(hd.triglycerides) as avgTriglycerides,
-			AVG(hd.vitaminD2) as avgVitaminD2,
-			AVG(hd.vitaminD3) as avgVitaminD3
+			AVG(hd.bloodPressureSystolic)  	as bloodPressureSystolic,
+			AVG(hd.bloodPressureDiastolic) 	as bloodPressureDiastolic,
+			AVG(hd.fastingBloodGlucose) 	as fastingBloodGlucose, 
+			AVG(hd.hdlCholesterol) 			as hdlCholesterol,  
+			AVG(hd.triglycerides) 			as triglycerides,       
+			AVG(hd.vitaminD2) 				as vitaminD2,        
+			AVG(hd.vitaminD3) 				as vitaminD3            
 			FROM health_data hd
 			JOIN users u ON hd.UserID = u.UserID
 			WHERE 
@@ -546,7 +577,7 @@ app.post('/auth/login', async (req, res) => {
 			return res.status(403).json({ error: "Account is locked. Please try again later." })
 		  }
 
-		  console.log(password, user.password)
+	
 	  
 		  const isPasswordValid = await bcrypt.compare(password, user.password)
 	  
