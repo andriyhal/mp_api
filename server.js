@@ -307,6 +307,9 @@ app.get('/get-health-data', verifyToken, async (req, res) => {
 			[userId]
 		);
 		
+		if (results.length === 0) {
+			return res.status(401).json({ error: "Invalid credentials" })
+		}
 		
 		res.json(results[0]);
 		} catch (error) {
@@ -388,13 +391,18 @@ app.get('/calc-health-score', verifyToken, async (req, res) => {
 			UserID = ? ORDER BY CreatedAt Desc limit 1`,
 			[userId]
 		);
+
+		
+		const heightInMeters = Number(results[0].height) / 100;
+		const calculatedBMI = (Number(results[0].weight) / (heightInMeters * heightInMeters)).toFixed(1);
+		
+		
 		
 		//console.log(results);
 		
 		if(0){ // 0 to skip chatgpt call
 			
-			const messages = 'Give me a json response in the format {score: <50> , description: <description> , lastUpdate: <lastUpdate>} in percentage based on the following parameters:  ' + JSON.stringify(results);
-			
+			const messages = `Give me a json response in the format {score: <50>, description: <description>, lastUpdate: <lastUpdate>, bmi: ${calculatedBMI} } in percentage based on the following parameters: ` + JSON.stringify(results);
 			
 			
 			// Call OpenAI API
@@ -406,10 +414,45 @@ app.get('/calc-health-score', verifyToken, async (req, res) => {
 			
 			// Send OpenAI's response back to the client
 			res.json(chatCompletion.choices[0].message.content)
-			}else{
-			res.json(' { "score": 40,  "description": "Fair - You need more activity and sleep.  this is dummy data",  "lastUpdate": "2025-01-05T15:25:43.000Z"}')
+		}else{
+			//return dummy data
+			res.json(` { "score": 40,  "description": "Fair - You need more activity and sleep.  this is dummy data",  "lastUpdate": "2025-01-05T15:25:43.000Z" , "bmi": "${calculatedBMI}" , 
+				 "activity_recommendations": [
+    {
+      "name": "Morning Yoga",
+      "description": "Start your day with 20-30 minutes of yoga to improve flexibility, reduce stress, and enhance mindfulness.",
+      "frequency": "Daily"
+    },
+    {
+      "name": "Strength Training",
+      "description": "Engage in resistance exercises to build muscle and improve bone density. Focus on compound movements like squats, deadlifts, and bench presses.",
+      "frequency": "2-3 times per week"
+    },
+    {
+      "name": "Outdoor Walking or Hiking",
+      "description": "Spend time outdoors walking or hiking to boost cardiovascular health, mood, and Vitamin D levels.",
+      "frequency": "3-5 times per week"
+    }
+  ],
+  "health_supplements": [
+    {
+      "name": "Vitamin D3",
+      "benefits": "Supports bone health, immune system, and mood regulation.",
+      "recommended_dosage": "1000-2000 IU daily or as recommended by a healthcare professional"
+    },
+    {
+      "name": "Omega-3 Fatty Acids (Fish Oil)",
+      "benefits": "Improves heart health, brain function, and reduces inflammation.",
+      "recommended_dosage": "1000-2000 mg of EPA and DHA daily"
+    },
+    {
+      "name": "Magnesium",
+      "benefits": "Promotes muscle recovery, improves sleep quality, and supports energy production.",
+      "recommended_dosage": "300-400 mg daily, preferably in citrate or glycinate form"
+    }
+  ]}`)
 		}
-		
+		//console.log(calculatedBMI,results[0].height,results[0].weight)
 		
 		
 		
