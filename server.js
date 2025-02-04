@@ -415,8 +415,146 @@ app.get('/calc-health-score', verifyToken, async (req, res) => {
 			// Send OpenAI's response back to the client
 			res.json(chatCompletion.choices[0].message.content)
 		}else{
+			//calculate score from excel formula
+			
+const scoreTables = {
+	'Height (cm)': [
+	  { range: [150, 200], score: 100 }, // Normal height range
+	  { range: '<150', score: 70 },
+	  { range: '>200', score: 80 }
+	],
+	'Weight (kg)': [
+	  { range: [50, 90], score: 100 },
+	  { range: [91, 120], score: 70 },
+	  { range: '>120', score: 40 }
+	],
+	'Waist Circumference (inches)': [  //Waist Height Ratio
+	  { range: [0.4, 0.49], score: 90 },
+	  { range: [0.5, 0.54], score: 80 },
+	  { range: [0.55, 0.59], score: 50 },
+	  { range: [0.6, 0.69], score:  20},
+	  { range: '<0.4', score: 100 },
+	  { range: '>0.7', score: 0 }
+	],
+  
+  
+	'Blood Pressure (Systolic)': [
+	  { range: [90, 120], score: 100 },
+	  { range: [121, 130], score: 90 },
+	  { range: [131, 140], score: 80 },
+	  { range: [141, 160], score: 60 },
+	  { range: '>160', score: 40 },
+	  { range: '<90', score: 70 }
+	],
+	'Blood Pressure (Diastolic)': [
+	  { range: [60, 80], score: 100 },
+	  { range: [81, 85], score: 90 },
+	  { range: [86, 90], score: 80 },
+	  { range: [91, 100], score: 60 },
+	  { range: '>100', score: 40 },
+	  { range: '<60', score: 70 }
+	],
+	'Fasting Blood Glucose (mg/dL)': [
+	  { range: [85, 89], score: 90 },
+	  { range: [90, 99], score: 80 },
+	  { range: [100, 109], score: 60 },
+	  { range: [110, 125], score: 40 },
+	  { range: '>126', score: 20 },
+	  { range: '<85', score: 100 }
+	],
+	'HDL Cholesterol (mg/dL)': [
+	  { range: [50, 59], score: 90 },
+	  { range: [40, 49], score: 80 },
+	  { range: [30, 39], score: 60 },
+	  { range: '>60', score: 100 },
+	  { range: '<30', score: 40 }
+	],
+	'Triglycerides (mg/dL)': [
+	  { range: [80, 99], score: 90 },
+	  { range: [100, 149], score: 80 },
+	  { range: [150, 199], score: 60 },
+	  { range: [200, 299], score: 40 },
+	  { range: '<80', score: 100 },
+	  { range: '>300', score: 20 }
+	],
+	'25-Hydroxyvitamin D2 (nmol/L)': [
+	  { range: [50, 150], score: 100 },
+	  { range: '<50', score: 20 },
+	  { range: '>150', score: 20 }
+	],
+	'25-Hydroxyvitamin D3 (nmol/L)': [
+	  { range: [50, 150], score: 100 },
+	  { range: '<50', score: 20 },
+	  { range: '>150', score: 20 }
+	]
+  };
+  
+  const parameters = [
+	{ value: 'height', label: 'Height (cm)' },
+	{ value: 'weight', label: 'Weight (kg)' },
+	{ value: 'waistCircumference', label: 'Waist Circumference (inches)' },
+	{ value: 'bloodPressureSystolic', label: 'Blood Pressure (Systolic)' },
+	{ value: 'bloodPressureDiastolic', label: 'Blood Pressure (Diastolic)' },
+	{ value: 'fastingBloodGlucose', label: 'Fasting Blood Glucose (mg/dL)' },
+	{ value: 'hdlCholesterol', label: 'HDL Cholesterol (mg/dL)' },
+	{ value: 'triglycerides', label: 'Triglycerides (mg/dL)' },
+	{ value: 'vitaminD2', label: '25-Hydroxyvitamin D2 (nmol/L)' },
+	{ value: 'vitaminD3', label: '25-Hydroxyvitamin D3 (nmol/L)' }
+  ];
+  
+  
+  
+  function calcScore(value, table) {
+	for (const row of table) {
+	  const { range, score } = row;
+  
+	  if (typeof range === 'string') {
+		if (range.startsWith('<') && value < parseFloat(range.slice(1))) {
+		  return score;
+		}
+		if (range.startsWith('>') && value > parseFloat(range.slice(1))) {
+		  return score;
+		}
+	  } else if (Array.isArray(range) && value >= range[0] && value <= range[1]) {
+		return score;
+	  }
+	}
+	return 0; // Return 0 if no range matched
+  }
+  
+  function calculateTotalScore(parameterValues) {
+	let totalScore = 0;
+  
+	for (const parameter of parameters) {
+	  const label = parameter.label;
+	  const value = parameterValues[label]; // Get the value for this parameter
+	  const table = scoreTables[label]; // Get the corresponding score table
+  
+	  if (value !== undefined && table) {
+		totalScore += calcScore(value, table);
+	  }
+	}
+  
+	return totalScore/parameters.length;
+  }
+
+  const parameterValues = {
+	'Height (cm)':                    Number(results[0].height),
+	'Weight (kg)':                    results[0].weight,
+	'Waist Circumference (inches)':   results[0].waistCircumference/Number(results[0].height),
+	'Blood Pressure (Systolic)':      results[0].bloodPressureSystolic,
+	'Blood Pressure (Diastolic)':     results[0].bloodPressureDiastolic,
+	'Fasting Blood Glucose (mg/dL)':  results[0].fastingBloodGlucose,
+	'HDL Cholesterol (mg/dL)':        results[0].hdlCholesterol,
+	'Triglycerides (mg/dL)':          results[0].triglycerides,
+	'25-Hydroxyvitamin D2 (nmol/L)':  results[0].vitaminD2,
+	'25-Hydroxyvitamin D3 (nmol/L)':  results[0].vitaminD3
+  };
+  
+  const totalScore = calculateTotalScore(parameterValues);
+
 			//return dummy data
-			res.json(` { "score": 40,  "description": "Fair - You need more activity and sleep.  this is dummy data",  "lastUpdate": "2025-01-05T15:25:43.000Z" , "bmi": "${calculatedBMI}" , 
+			res.json(` { "score": ${totalScore},  "description": "Fair - You need more activity and sleep.  this is dummy data",  "lastUpdate": "2025-01-05T15:25:43.000Z" , "bmi": "${calculatedBMI}" , 
 				 "activity_recommendations": [
     {
       "name": "Morning Yoga",
