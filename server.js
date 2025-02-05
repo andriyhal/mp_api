@@ -467,7 +467,7 @@ const scoreTables = {
 	  { range: [40, 49], score: 80 },
 	  { range: [30, 39], score: 60 },
 	  { range: '>60', score: 100 },
-	  { range: '<30', score: 40 }
+	  { range: '<30', score: 40  }
 	],
 	'Triglycerides (mg/dL)': [
 	  { range: [80, 99], score: 90 },
@@ -818,6 +818,103 @@ app.post('/auth/login', async (req, res) => {
 	  res.json({ newToken });
 	} catch (error) {
 	  res.status(401).json({ message: 'Invalid or expired token' });
+	}
+  });
+
+  // Route to handle health score submission
+app.get('/get-reco-actions', verifyToken, async (req, res) => {
+	try {
+		const { userId  } = req.query;
+		
+		// Validate input
+		if (!userId  ) {
+			return res.status(400).json({ error: 'Missing required parameters: userId' });
+		}
+		
+		
+		//const userId = 'test@example.com';
+		
+		const [health_data] = await pool.execute(
+			`SELECT 
+			UserID, 
+			Weight as weight, 
+			BloodPressureSystolic as bloodPressureSystolic, 
+			BloodPressureDiastolic as bloodPressureDiastolic, 
+			FastingBloodGlucose as fastingBloodGlucose, 
+			HDLCholesterol as hdlCholesterol, 
+			Triglycerides as triglycerides, 
+			CreatedAt as lastUpdate, 
+			height, 
+			waistCircumference, 
+			vitaminD2, 
+			vitaminD3
+			FROM health_data hd
+			WHERE 
+			UserID = ? ORDER BY CreatedAt Desc limit 1`,
+			[userId]
+		);
+
+		const [results] = await pool.execute(
+			`SELECT r.*, b.name as biomarker_name 
+			 FROM recommendations r 
+			 JOIN biomarkers b ON r.biomarker_id = b.id`
+		);
+
+		const recommendations = results.map(result => {
+			const healthData = health_data[0];
+			const numericHealthData = {
+				weight: parseFloat(healthData.weight),
+				bloodPressureSystolic: parseFloat(healthData.bloodPressureSystolic),
+				bloodPressureDiastolic: parseFloat(healthData.bloodPressureDiastolic),
+				fastingBloodGlucose: parseFloat(healthData.fastingBloodGlucose),
+				hdlCholesterol: parseFloat(healthData.hdlCholesterol),
+				triglycerides: parseFloat(healthData.triglycerides),
+				height: parseFloat(healthData.height),
+				waistCircumference: parseFloat(healthData.waistCircumference),
+				vitaminD2: parseFloat(healthData.vitaminD2),
+				vitaminD3: parseFloat(healthData.vitaminD3),
+			};
+
+			if (result.biomarker_name === 'weight' && numericHealthData.weight >= result.range_from && numericHealthData.weight <= result.range_to) {
+				return result;
+			} else if (result.biomarker_name === 'bloodPressureSystolic' && numericHealthData.bloodPressureSystolic >= result.range_from && numericHealthData.bloodPressureSystolic <= result.range_to) {
+				return result;
+			} else if (result.biomarker_name === 'bloodPressureDiastolic' && numericHealthData.bloodPressureDiastolic >= result.range_from && numericHealthData.bloodPressureDiastolic <= result.range_to) {
+				return result;
+			} else if (result.biomarker_name === 'fastingBloodGlucose' && numericHealthData.fastingBloodGlucose >= result.range_from && numericHealthData.fastingBloodGlucose <= result.range_to) {
+				return result;
+			} else if (result.biomarker_name === 'hdlCholesterol' && numericHealthData.hdlCholesterol >= result.range_from && numericHealthData.hdlCholesterol <= result.range_to) {
+				return result;
+			} else if (result.biomarker_name === 'triglycerides' && numericHealthData.triglycerides >= result.range_from && numericHealthData.triglycerides <= result.range_to) {
+				return result;
+			} else if (result.biomarker_name === 'height' && numericHealthData.height >= result.range_from && numericHealthData.height <= result.range_to) {
+				return result;
+			} else if (result.biomarker_name === 'waistCircumference' && numericHealthData.waistCircumference >= result.range_from && numericHealthData.waistCircumference <= result.range_to) {
+				return result;
+			} else if (result.biomarker_name === 'vitaminD2' && numericHealthData.vitaminD2 >= result.range_from && numericHealthData.vitaminD2 <= result.range_to) {
+				return result;
+			} else if (result.biomarker_name === 'vitaminD3' && numericHealthData.vitaminD3 >= result.range_from && numericHealthData.vitaminD3 <= result.range_to) {
+				return result;
+			}
+			return null;
+		}).filter(Boolean);
+
+		
+
+		const mytemp = recommendations.map(result => ({
+			title: `Your ${result.biomarker_name} is between ${result.range_from} - ${result.range_to}`,
+			description: `${result.description}`,
+			linkText: "Go",
+			icon: result.type === 'supplement' ? "PillIcon" : result.type === 'paleo' ? "LeafIcon" : result.type === 'carnivore' ? "MeatIcon" : result.type === 'activity' ? "TargetIcon" : "PlayIcon",
+			iconColor: result.type === 'supplement' ? "blue" : result.type === 'paleo' ? "green" : result.type === 'carnivore' ? "red" : result.type === 'activity' ? "orange" : "purple"
+		}));
+
+		console.log(mytemp, health_data[0] )
+
+		//res.json({temp});
+		res.json(mytemp);
+	} catch (error) {
+	  res.status(401).json({ message: 'Error getting recommendations' });
 	}
   });
 
