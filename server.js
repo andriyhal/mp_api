@@ -18,6 +18,11 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3000;
 
+// enabling CORS for some specific origins only.
+let corsOptions = {
+	origin : ['http://localhost:3000','https://metabolicpoint.insolutionsoftware.co.uk'],
+ }
+ 
 
 
 // Initialize OpenAI API
@@ -43,7 +48,7 @@ const upload = multer({
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
 // Middleware to verify JWT
