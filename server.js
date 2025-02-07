@@ -403,9 +403,9 @@ app.get('/calc-health-score', verifyToken, async (req, res) => {
 		
 		
 		
-		//console.log(results);
+		//console.log(process.env.ENABLE_OPENAI_SCORE);
 		
-		if(0){ // 0 to skip chatgpt call
+		if(process.env.ENABLE_OPENAI_SCORE == 'true' ){ // 0 to skip chatgpt call
 			
 			const messages = `Give me a json response in the format {score: <50>, description: <description>, lastUpdate: <lastUpdate>, bmi: ${calculatedBMI} } in percentage based on the following parameters: ` + JSON.stringify(results);
 			
@@ -651,39 +651,99 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 		`INSERT INTO data_upload (UserID, filename, data, file_type, file_path, ocr_text) VALUES (?, ?, ?, ?, ?, ?)`,
 		[UserID, originalname, base64Data, fileType.ext, filePath, ocrText]
 	  );
+
+	  //perform data extraction using ai - 
+	  let json_results;
 	  
-	  //perform data extraction using ai - TODO
-	  
-	  let json_results = `{
-  "Collection Date": "June 24, 2023, 08:49 PM",
-  "Report Date": "June 24, 2023, 09:02 PM",
-  "Total Cholesterol": {
-    "Value": 156,
-    "Unit": "mg/dL",
-    "Reference Range": "0-200 mg/dL"
+	  if(process.env.ENABLE_OPENAI_DATA_EXTRACTION == 'true'){
+		console.log('ENABLE_OPENAI_DATA_EXTRACTION')
+		const messages = `return a JSON file like {
+  "Collection Date": "24/06/2023 08:49 PM",
+  "Report Date": "24/06/2023 09:02 PM",
+  "Total Cholesterol":  {
+    "Value": 8.79,
+    "Unit": "µU/mL",
+    "Reference Range": "<25"
   },
-  "Triglycerides": {
-    "Value": 150,
-    "Unit": "mg/dL",
-    "Reference Range": "0-170 mg/dL"
+  "Triglycerides level":  {
+    "Value": 8.79,
+    "Unit": "µU/mL",
+    "Reference Range": "<25"
   },
-  "HDL Cholesterol": {
-    "Value": 45,
-    "Unit": "mg/dL",
-    "Reference Range": "40-70 mg/dL"
+  "HDL Cholesterol":  {
+    "Value": 8.79,
+    "Unit": "µU/mL",
+    "Reference Range": "<25"
   },
-  "LDL Cholesterol": {
-    "Value": 81.00,
-    "Unit": "mg/dL",
-    "Reference Range": "0-100 mg/dL"
+  "LDL Cholesterol":  {
+    "Value": 8.79,
+    "Unit": "µU/mL",
+    "Reference Range": "<25"
   },
-  "VLDL Cholesterol": {
-    "Value": 30.00,
-    "Unit": "mg/dL",
-    "Reference Range": "6-38 mg/dL"
+  "VLDL Cholesterol":  {
+    "Value": 8.79,
+    "Unit": "µU/mL",
+    "Reference Range": "<25"
+  },
+  "LDL/HDL RATIO":  {
+    "Value": 8.79,
+    "Unit": "µU/mL",
+    "Reference Range": "<25"
+  },
+  "Total Cholesterol/HDL RATIO":  {
+    "Value": 8.79,
+    "Unit": "µU/mL",
+    "Reference Range": "<25"
+  },
+"Fasting Insulin": {
+    "Value": 8.79,
+    "Unit": "µU/mL",
+    "Reference Range": "<25"
   }
-}
-`;
+} from the following free text : ` + ocrText;
+			
+			
+			// Call OpenAI API
+			const chatCompletion = await openai.chat.completions.create({
+				model: "gpt-3.5-turbo",
+				messages: [{"role": "user", "content": messages}],
+			});
+
+			json_results = chatCompletion.choices[0].message.content;
+
+	  }else{
+		console.log('dummy data')
+			json_results = `{
+		"Collection Date": "June 24, 2023, 08:49 PM",
+		"Report Date": "June 24, 2023, 09:02 PM",
+		"Total Cholesterol": {
+			"Value": 156,
+			"Unit": "mg/dL",
+			"Reference Range": "0-200 mg/dL"
+		},
+		"Triglycerides": {
+			"Value": 150,
+			"Unit": "mg/dL",
+			"Reference Range": "0-170 mg/dL"
+		},
+		"HDL Cholesterol": {
+			"Value": 45,
+			"Unit": "mg/dL",
+			"Reference Range": "40-70 mg/dL"
+		},
+		"LDL Cholesterol": {
+			"Value": 81.00,
+			"Unit": "mg/dL",
+			"Reference Range": "0-100 mg/dL"
+		},
+		"VLDL Cholesterol": {
+			"Value": 30.00,
+			"Unit": "mg/dL",
+			"Reference Range": "6-38 mg/dL"
+		}
+		}
+		`;
+	  }
   
 	  res.status(201).json({ 
 		message: 'File uploaded successfully', 
@@ -914,7 +974,7 @@ app.get('/get-reco-actions', verifyToken, async (req, res) => {
 			iconColor: result.type === 'supplement' ? "blue" : result.type === 'paleo' ? "green" : result.type === 'carnivore' ? "red" : result.type === 'activity' ? "orange" : "purple"
 		}));
 
-		console.log(mytemp, health_data[0] )
+		//console.log(mytemp, health_data[0] )
 
 		//res.json({temp});
 		res.json(mytemp);
