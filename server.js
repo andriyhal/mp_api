@@ -424,16 +424,7 @@ app.get('/calc-health-score', verifyToken, async (req, res) => {
 			//calculate score from excel formula
 			
 const scoreTables = {
-	'Height (cm)': [
-	  { range: [150, 200], score: 100 }, // Normal height range
-	  { range: '<150', score: 70 },
-	  { range: '>200', score: 80 }
-	],
-	'Weight (kg)': [
-	  { range: [50, 90], score: 100 },
-	  { range: [91, 120], score: 70 },
-	  { range: '>120', score: 40 }
-	],
+	
 	'Waist Circumference (inches)': [  //Waist Height Ratio
 	  { range: [0.4, 0.49], score: 90 },
 	  { range: [0.5, 0.54], score: 80 },
@@ -483,29 +474,28 @@ const scoreTables = {
 	  { range: '<80', score: 100 },
 	  { range: '>300', score: 20 }
 	],
-	'25-Hydroxyvitamin D2 (nmol/L)': [
-	  { range: [50, 150], score: 100 },
-	  { range: '<50', score: 20 },
-	  { range: '>150', score: 20 }
-	],
-	'25-Hydroxyvitamin D3 (nmol/L)': [
-	  { range: [50, 150], score: 100 },
-	  { range: '<50', score: 20 },
-	  { range: '>150', score: 20 }
-	]
+	// '25-Hydroxyvitamin D2 (nmol/L)': [
+	//   { range: [50, 150], score: 100 },
+	//   { range: '<50', score: 20 },
+	//   { range: '>150', score: 20 }
+	// ],
+	// '25-Hydroxyvitamin D3 (nmol/L)': [
+	//   { range: [50, 150], score: 100 },
+	//   { range: '<50', score: 20 },
+	//   { range: '>150', score: 20 }
+	// ]
   };
   
   const parameters = [
-	{ value: 'height', label: 'Height (cm)' },
-	{ value: 'weight', label: 'Weight (kg)' },
+	
 	{ value: 'waistCircumference', label: 'Waist Circumference (inches)' },
 	{ value: 'bloodPressureSystolic', label: 'Blood Pressure (Systolic)' },
 	{ value: 'bloodPressureDiastolic', label: 'Blood Pressure (Diastolic)' },
 	{ value: 'fastingBloodGlucose', label: 'Fasting Blood Glucose (mg/dL)' },
 	{ value: 'hdlCholesterol', label: 'HDL Cholesterol (mg/dL)' },
-	{ value: 'triglycerides', label: 'Triglycerides (mg/dL)' },
-	{ value: 'vitaminD2', label: '25-Hydroxyvitamin D2 (nmol/L)' },
-	{ value: 'vitaminD3', label: '25-Hydroxyvitamin D3 (nmol/L)' }
+	{ value: 'triglycerides', label: 'Triglycerides (mg/dL)' }
+	// { value: 'vitaminD2', label: '25-Hydroxyvitamin D2 (nmol/L)' },
+	// { value: 'vitaminD3', label: '25-Hydroxyvitamin D3 (nmol/L)' }
   ];
   
   
@@ -529,7 +519,10 @@ const scoreTables = {
   }
   
   function calculateTotalScore(parameterValues) {
+	
 	let totalScore = 0;
+	let parameterScore = 0;
+	let parameterScoreJson = {};
   
 	for (const parameter of parameters) {
 	  const label = parameter.label;
@@ -537,65 +530,82 @@ const scoreTables = {
 	  const table = scoreTables[label]; // Get the corresponding score table
   
 	  if (value !== undefined && table) {
-		totalScore += calcScore(value, table);
+	    parameterScore = calcScore(value, table);
+		totalScore += parameterScore;
+		parameterScoreJson[parameter.value] = parameterScore;
 	  }
 	}
+	//breakdown.push(parameterScoreJson);
+
+	//get the average of the scores
+	//breakdown.push(['Total' , totalScore/parameters.length]);
+	parameterScoreJson['score'] = (totalScore/parameters.length).toFixed(2);
+
   
-	return totalScore/parameters.length;
+	return parameterScoreJson
   }
 
   const parameterValues = {
-	'Height (cm)':                    Number(results[0].height),
-	'Weight (kg)':                    results[0].weight,
-	'Waist Circumference (inches)':   results[0].waistCircumference/Number(results[0].height),
+	// 'Height (cm)':                    Number(results[0].height),
+	// 'Weight (kg)':                    results[0].weight,
+	'Waist Circumference (inches)':   results[0].waistCircumference/Number(results[0].height),  //waist height ratio
 	'Blood Pressure (Systolic)':      results[0].bloodPressureSystolic,
 	'Blood Pressure (Diastolic)':     results[0].bloodPressureDiastolic,
 	'Fasting Blood Glucose (mg/dL)':  results[0].fastingBloodGlucose,
 	'HDL Cholesterol (mg/dL)':        results[0].hdlCholesterol,
 	'Triglycerides (mg/dL)':          results[0].triglycerides,
-	'25-Hydroxyvitamin D2 (nmol/L)':  results[0].vitaminD2,
-	'25-Hydroxyvitamin D3 (nmol/L)':  results[0].vitaminD3
+	// '25-Hydroxyvitamin D2 (nmol/L)':  results[0].vitaminD2,
+	// '25-Hydroxyvitamin D3 (nmol/L)':  results[0].vitaminD3
   };
   
-  const totalScore = calculateTotalScore(parameterValues);
+  let totalScore = calculateTotalScore(parameterValues);
 
-			//return dummy data
-			res.json(` { "score": ${totalScore},  "description": "Fair - You need more activity and sleep.  this is dummy data",  "lastUpdate": "2025-01-05T15:25:43.000Z" , "bmi": "${calculatedBMI}" , 
-				 "activity_recommendations": [
-    {
-      "name": "Morning Yoga",
-      "description": "Start your day with 20-30 minutes of yoga to improve flexibility, reduce stress, and enhance mindfulness.",
-      "frequency": "Daily"
-    },
-    {
-      "name": "Strength Training",
-      "description": "Engage in resistance exercises to build muscle and improve bone density. Focus on compound movements like squats, deadlifts, and bench presses.",
-      "frequency": "2-3 times per week"
-    },
-    {
-      "name": "Outdoor Walking or Hiking",
-      "description": "Spend time outdoors walking or hiking to boost cardiovascular health, mood, and Vitamin D levels.",
-      "frequency": "3-5 times per week"
-    }
-  ],
-  "health_supplements": [
-    {
-      "name": "Vitamin D3",
-      "benefits": "Supports bone health, immune system, and mood regulation.",
-      "recommended_dosage": "1000-2000 IU daily or as recommended by a healthcare professional"
-    },
-    {
-      "name": "Omega-3 Fatty Acids (Fish Oil)",
-      "benefits": "Improves heart health, brain function, and reduces inflammation.",
-      "recommended_dosage": "1000-2000 mg of EPA and DHA daily"
-    },
-    {
-      "name": "Magnesium",
-      "benefits": "Promotes muscle recovery, improves sleep quality, and supports energy production.",
-      "recommended_dosage": "300-400 mg daily, preferably in citrate or glycinate form"
-    }
-  ]}`)
-		}
+  totalScore.lastUpdate = "2025-01-05T15:25:43.000Z" ;
+  totalScore.bmi = calculatedBMI ; 
+  
+
+  //return dummy data
+ // console.log(totalScore)
+			res.json(totalScore)
+
+// 			//return dummy data
+// 			res.json(` { "score": ${totalScore},  "description": "Fair - You need more activity and sleep.  this is dummy data",  "lastUpdate": "2025-01-05T15:25:43.000Z" , "bmi": "${calculatedBMI}" , 
+// 				 "activity_recommendations": [
+//     {
+//       "name": "Morning Yoga",
+//       "description": "Start your day with 20-30 minutes of yoga to improve flexibility, reduce stress, and enhance mindfulness.",
+//       "frequency": "Daily"
+//     },
+//     {
+//       "name": "Strength Training",
+//       "description": "Engage in resistance exercises to build muscle and improve bone density. Focus on compound movements like squats, deadlifts, and bench presses.",
+//       "frequency": "2-3 times per week"
+//     },
+//     {
+//       "name": "Outdoor Walking or Hiking",
+//       "description": "Spend time outdoors walking or hiking to boost cardiovascular health, mood, and Vitamin D levels.",
+//       "frequency": "3-5 times per week"
+//     }
+//   ],
+//   "health_supplements": [
+//     {
+//       "name": "Vitamin D3",
+//       "benefits": "Supports bone health, immune system, and mood regulation.",
+//       "recommended_dosage": "1000-2000 IU daily or as recommended by a healthcare professional"
+//     },
+//     {
+//       "name": "Omega-3 Fatty Acids (Fish Oil)",
+//       "benefits": "Improves heart health, brain function, and reduces inflammation.",
+//       "recommended_dosage": "1000-2000 mg of EPA and DHA daily"
+//     },
+//     {
+//       "name": "Magnesium",
+//       "benefits": "Promotes muscle recovery, improves sleep quality, and supports energy production.",
+//       "recommended_dosage": "300-400 mg daily, preferably in citrate or glycinate form"
+//     }
+//   ]}`)
+
+		} // end else for if ENABLE_OPENAI_SCORE
 		//console.log(calculatedBMI,results[0].height,results[0].weight)
 		
 		
