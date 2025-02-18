@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import { createWorker } from 'tesseract.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from "bcrypt";
+import gm from "gm";
 
 dotenv.config();
 
@@ -614,6 +615,23 @@ async function performOCR(filePath) {
 	await worker.terminate();
 	return text;
   }
+
+// Function to convert PDF to JPG using GraphicsMagick
+function convertPDFtoJPG(pdfPath, outputPath) {
+	return new Promise((resolve, reject) => {
+	  gm(pdfPath + "[0]")
+		.density(300, 300)
+		.quality(100)
+		.resize(2480, 3508)
+		.write(outputPath, (err) => {
+		  if (err) {
+			reject(err)
+		  } else {
+			resolve(outputPath)
+		  }
+		})
+	})
+  }
   
 app.post('/import-file', verifyToken, upload.single('file'), async (req, res) => {
 	try {
@@ -643,13 +661,26 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 	  const base64Data = buffer.toString('base64');
   
 	  let ocrText = null;
-	  if (['jpg', 'jpeg', 'png'].includes(fileType.ext)) {
-		ocrText = await performOCR(filePath);
+	  let processedFilePath = filePath;
+
+	 
+	  
+	  if (fileType.ext === "pdf") {
+		// Convert PDF to JPG
+		const jpgOutputPath = path.join(uploadsFolder, `${path.parse(uniqueFilename).name}.jpg`)
+		processedFilePath = await convertPDFtoJPG(filePath, jpgOutputPath)
+	  }
+  
+	  if (["jpg", "jpeg", "png"].includes(fileType.ext) || fileType.ext === "pdf") {
+		ocrText = await performOCR(processedFilePath)
 	  }
   
 	  const [result] = await pool.execute(
+		// `INSERT INTO data_upload (UserID, filename, data, file_type, file_path, ocr_text) VALUES (?, ?, ?, ?, ?, ?)`,
+		// [UserID, originalname, base64Data, fileType.ext, filePath, ocrText]
+
 		`INSERT INTO data_upload (UserID, filename, data, file_type, file_path, ocr_text) VALUES (?, ?, ?, ?, ?, ?)`,
-		[UserID, originalname, base64Data, fileType.ext, filePath, ocrText]
+		[UserID, originalname, '', fileType.ext, filePath, ocrText]
 	  );
 
 	  //perform data extraction using ai - 
@@ -736,8 +767,8 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 			"Unit": "mg/dL",
 			"Reference Range": "0-100 mg/dL"
 		},
-		"VLDL Cholesterol": {
-			"Value": 30.00,
+		"OCR_text": {
+			"Value": "${ocrText}",
 			"Unit": "mg/dL",
 			"Reference Range": "6-38 mg/dL"
 		}
