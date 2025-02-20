@@ -294,23 +294,42 @@ app.get('/get-health-data', verifyToken, async (req, res) => {
 		
 		
 		const [results] = await pool.execute(
+
+			
 			`SELECT 
 			 
-			Weight as weight, 
+			
 			BloodPressureSystolic as bloodPressureSystolic, 
 			BloodPressureDiastolic as bloodPressureDiastolic, 
 			FastingBloodGlucose as fastingBloodGlucose, 
 			HDLCholesterol as hdlCholesterol, 
 			Triglycerides as triglycerides, 
 			CreatedAt as lastUpdate, 
-			height, 
-			waistCircumference, 
-			vitaminD2, 
-			vitaminD3
+		
+			waistCircumference
+		
 			FROM health_data hd
 			WHERE 
 			UserID = ? ORDER BY CreatedAt Desc limit 1`,
 			[userId]
+
+			// `SELECT 
+			 
+			// Weight as weight, 
+			// BloodPressureSystolic as bloodPressureSystolic, 
+			// BloodPressureDiastolic as bloodPressureDiastolic, 
+			// FastingBloodGlucose as fastingBloodGlucose, 
+			// HDLCholesterol as hdlCholesterol, 
+			// Triglycerides as triglycerides, 
+			// CreatedAt as lastUpdate, 
+			// height, 
+			// waistCircumference, 
+			// vitaminD2, 
+			// vitaminD3
+			// FROM health_data hd
+			// WHERE 
+			// UserID = ? ORDER BY CreatedAt Desc limit 1`,
+			// [userId]
 		);
 		
 		if (results.length === 0) {
