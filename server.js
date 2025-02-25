@@ -297,8 +297,8 @@ app.get('/get-health-data', verifyToken, async (req, res) => {
 
 			
 			`SELECT 
-			 
-			
+			height, 
+			Weight as weight, 
 			BloodPressureSystolic as bloodPressureSystolic, 
 			BloodPressureDiastolic as bloodPressureDiastolic, 
 			FastingBloodGlucose as fastingBloodGlucose, 
@@ -579,7 +579,7 @@ const scoreTables = {
   
   let totalScore = calculateTotalScore(parameterValues);
 
-  totalScore.lastUpdate = "2025-01-05T15:25:43.000Z" ;
+  totalScore.lastUpdate = results[0].lastUpdate ;
   totalScore.bmi = calculatedBMI ; 
   
 
@@ -796,14 +796,56 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 			"Unit": "mg/dL",
 			"Reference Range": "0-100 mg/dL"
 		},
-		"OCR_text": {
-			"Value": "${ocrText}",
+		"Fasting Blood Glucose": {
+			"Value": 80,
 			"Unit": "mg/dL",
-			"Reference Range": "6-38 mg/dL"
+			"Reference Range": "60-80 mg/dL"
+		},
+		"Fasting Insulin": {
+			"Value": 8.79,
+			"Unit": "µU/mL",
+			"Reference Range": "<25"
 		}
 		}
 		`;
 	  }
+
+	 //get users prev data 
+	  const [results2] = await pool.execute(
+		`SELECT 
+		Weight as weight, 
+		BloodPressureSystolic as bloodPressureSystolic, 
+		BloodPressureDiastolic as bloodPressureDiastolic, 
+		height, 
+		waistCircumference
+		FROM health_data hd
+		WHERE 
+		UserID = ? ORDER BY CreatedAt Desc limit 1`,
+		[UserID]
+	);
+
+	  //insert data ocr data into db
+	//   const [result2] = await pool.execute(
+	// 	`INSERT INTO health_data 
+	// 	(UserID, height, weight, waistCircumference, bloodPressureSystolic, 
+	// 	bloodPressureDiastolic, fastingBloodGlucose, hdlCholesterol, triglycerides, vitaminD2, vitaminD3) 
+	// 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	// 	[UserID, height, weight, waistCircumference, bloodPressureSystolic,
+	// 	bloodPressureDiastolic, fastingBloodGlucose, hdlCholesterol, triglycerides, vitaminD2, vitaminD3]
+	// ); 
+
+	const jsonData = JSON.parse(json_results);
+const {  "Fasting Blood Glucose": fastingBloodGlucose, "Triglycerides": triglycerides, "HDL Cholesterol": hdlCholesterol} = jsonData;
+
+// Insert data into health_data table
+const [result3] = await pool.execute(
+	`INSERT INTO health_data 
+	(UserID, fastingBloodGlucose, hdlCholesterol, triglycerides	, height, weight, waistCircumference, bloodPressureSystolic, bloodPressureDiastolic) 
+	VALUES (?, ?, ?, ?,?,?, ?, ?, ?)`,
+	[UserID, fastingBloodGlucose.Value, hdlCholesterol.Value, triglycerides.Value , results2[0].height, results2[0].weight, results2[0].waistCircumference, results2[0].bloodPressureSystolic, results2[0].bloodPressureDiastolic]
+); 
+
+
   
 	  res.status(201).json({ 
 		message: 'File uploaded successfully', 
