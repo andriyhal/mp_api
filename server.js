@@ -153,17 +153,17 @@ app.post('/submit-health-data' , verifyToken, async (req, res) => {
 			fastingBloodGlucose,
 			hdlCholesterol,
 			triglycerides,
-			vitaminD2,
-			vitaminD3
+			// vitaminD2,
+			// vitaminD3
 		} = req.body;
 		
 		const [result] = await pool.execute(
 			`INSERT INTO health_data 
 			(UserID, height, weight, waistCircumference, bloodPressureSystolic, 
-			bloodPressureDiastolic, fastingBloodGlucose, hdlCholesterol, triglycerides, vitaminD2, vitaminD3) 
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			bloodPressureDiastolic, fastingBloodGlucose, hdlCholesterol, triglycerides) 
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[UserID, height, weight, waistCircumference, bloodPressureSystolic,
-			bloodPressureDiastolic, fastingBloodGlucose, hdlCholesterol, triglycerides, vitaminD2, vitaminD3]
+			bloodPressureDiastolic, fastingBloodGlucose, hdlCholesterol, triglycerides]
 		);
 		
 		res.status(201).json({ message: 'Health data submitted successfully', id: result.insertId });
@@ -704,13 +704,7 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 		ocrText = await performOCR(processedFilePath)
 	  }
   
-	  const [result] = await pool.execute(
-		// `INSERT INTO data_upload (UserID, filename, data, file_type, file_path, ocr_text) VALUES (?, ?, ?, ?, ?, ?)`,
-		// [UserID, originalname, base64Data, fileType.ext, filePath, ocrText]
-
-		`INSERT INTO data_upload (UserID, filename, data, file_type, file_path, ocr_text) VALUES (?, ?, ?, ?, ?, ?)`,
-		[UserID, originalname, '', fileType.ext, filePath, ocrText]
-	  );
+	 
 
 	  //perform data extraction using ai - 
 	  let json_results;
@@ -755,8 +749,13 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
     "Unit": "µU/mL",
     "Reference Range": "<25"
   },
+  "Fasting Blood Glucose": {
+			"Value": 80,
+			"Unit": "mg/dL",
+			"Reference Range": "60-80 mg/dL"
+		},
 "Fasting Insulin": {
-    "Value": 8.79,
+    "Value": 0,
     "Unit": "µU/mL",
     "Reference Range": "<25"
   }
@@ -810,6 +809,15 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 		`;
 	  }
 
+	  const [result] = await pool.execute(
+		// `INSERT INTO data_upload (UserID, filename, data, file_type, file_path, ocr_text) VALUES (?, ?, ?, ?, ?, ?)`,
+		// [UserID, originalname, base64Data, fileType.ext, filePath, ocrText]
+
+		`INSERT INTO data_upload (UserID, filename, data, file_type, file_path, ocr_text) VALUES (?, ?, ?, ?, ?, ?)`,
+		[UserID, originalname, json_results , fileType.ext, filePath, ocrText]
+	  );
+
+
 	 //get users prev data 
 	  const [results2] = await pool.execute(
 		`SELECT 
@@ -835,15 +843,52 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 	// ); 
 
 	const jsonData = JSON.parse(json_results);
-const {  "Fasting Blood Glucose": fastingBloodGlucose, "Triglycerides": triglycerides, "HDL Cholesterol": hdlCholesterol} = jsonData;
 
-// Insert data into health_data table
-const [result3] = await pool.execute(
-	`INSERT INTO health_data 
-	(UserID, fastingBloodGlucose, hdlCholesterol, triglycerides	, height, weight, waistCircumference, bloodPressureSystolic, bloodPressureDiastolic) 
-	VALUES (?, ?, ?, ?,?,?, ?, ?, ?)`,
-	[UserID, fastingBloodGlucose.Value, hdlCholesterol.Value, triglycerides.Value , results2[0].height, results2[0].weight, results2[0].waistCircumference, results2[0].bloodPressureSystolic, results2[0].bloodPressureDiastolic]
-); 
+	const json_results_template = {
+		"Collection Date": "",
+		"Report Date": "",
+		"Total Cholesterol": {
+			"Value": 0,
+			"Unit": "mg/dL",
+			"Reference Range": "0-200 mg/dL"
+		},
+		"Triglycerides": {
+			"Value": 0,
+			"Unit": "mg/dL",
+			"Reference Range": "0-170 mg/dL"
+		},
+		"HDL Cholesterol": {
+			"Value": 0,
+			"Unit": "mg/dL",
+			"Reference Range": "40-70 mg/dL"
+		},
+		"LDL Cholesterol": {
+			"Value": 0,
+			"Unit": "mg/dL",
+			"Reference Range": "0-100 mg/dL"
+		},
+		"Fasting Blood Glucose": {
+			"Value": 0,
+			"Unit": "mg/dL",
+			"Reference Range": "60-80 mg/dL"
+		},
+		"Fasting Insulin": {
+			"Value": 0,
+			"Unit": "µU/mL",
+			"Reference Range": "<25"
+		}
+		}
+		;
+
+	const combinedData = {...json_results_template , ...jsonData };
+
+	// Insert data into health_data table
+	const [result3] = await pool.execute(
+		`INSERT INTO health_data 
+		(UserID, fastingBloodGlucose, hdlCholesterol, triglycerides, height, weight, waistCircumference, bloodPressureSystolic, bloodPressureDiastolic) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		[UserID, combinedData["Fasting Blood Glucose"].Value, combinedData["HDL Cholesterol"].Value, combinedData["Triglycerides"].Value, results2[0].height, results2[0].weight, results2[0].waistCircumference, results2[0].bloodPressureSystolic, results2[0].bloodPressureDiastolic]
+	);
 
 
   
@@ -852,7 +897,7 @@ const [result3] = await pool.execute(
 		id: result.insertId, 
 		filePath,
 		//ocrText: ocrText ? ocrText.substring(0, 100) + '...' : null // Send a preview of OCR text
-		ocrText: json_results ? json_results : null //return results
+		ocrText: JSON.stringify(combinedData)
 	  });
 	} catch (error) {
 	  console.error('Error uploading file:', error);
