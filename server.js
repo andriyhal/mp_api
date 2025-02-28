@@ -13,6 +13,7 @@ import { createWorker } from 'tesseract.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from "bcrypt";
 import gm from "gm";
+import pdfParse from "pdf-parse";
 
 dotenv.config();
 
@@ -695,12 +696,19 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 	 
 	  
 	  if (fileType.ext === "pdf") {
-		// Convert PDF to JPG
-		const jpgOutputPath = path.join(uploadsFolder, `${path.parse(uniqueFilename).name}.jpg`)
-		processedFilePath = await convertPDFtoJPG(filePath, jpgOutputPath)
+		// // Convert PDF to JPG
+		// const jpgOutputPath = path.join(uploadsFolder, `${path.parse(uniqueFilename).name}.jpg`)
+		// processedFilePath = await convertPDFtoJPG(filePath, jpgOutputPath)
+
+		 // Extract text from PDF locally
+		 const dataBuffer = fs.readFileSync(filePath);
+	 
+		 const pdfData = await pdfParse(dataBuffer);
+		 ocrText = pdfData.text;
+
 	  }
   
-	  if (["jpg", "jpeg", "png"].includes(fileType.ext) || fileType.ext === "pdf") {
+	  if (["jpg", "jpeg", "png"].includes(fileType.ext) ) {
 		ocrText = await performOCR(processedFilePath)
 	  }
   
@@ -711,7 +719,21 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 	  
 	  if(process.env.ENABLE_OPENAI_DATA_EXTRACTION == 'true'){
 		console.log('ENABLE_OPENAI_DATA_EXTRACTION')
-		const messages = `return a JSON file like {
+//using assistant
+try {
+	
+	if (req.file.size > 20 * 1024 * 1024) {
+		return res.status(400).json({ error: "File too large. Maximum size is 20MB." });
+	}
+	
+	
+	 const extractedText = pocrText
+
+	 // Use GPT-4 Turbo for text-based PDFs
+	 const extractResponse = await openai.chat.completions.create({
+		 model: "gpt-3.5-turbo", //gpt-3.5-turbo
+		 messages: [
+			 { role: "system", content: `extract the relevant data from the content and return a properly formated JSON string that can be parsed in a format like '{
   "Collection Date": "24/06/2023 08:49 PM",
   "Report Date": "24/06/2023 09:02 PM",
   "Total Cholesterol":  {
@@ -759,16 +781,83 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
     "Unit": "µU/mL",
     "Reference Range": "<25"
   }
-} from the following free text : ` + ocrText;
-			
-			
-			// Call OpenAI API
-			const chatCompletion = await openai.chat.completions.create({
-				model: "gpt-3.5-turbo",
-				messages: [{"role": "user", "content": messages}],
-			});
+}'  ` },
+			 { role: "user", content: extractedText }
+		 ],
+	 });
+	
 
-			json_results = chatCompletion.choices[0].message.content;
+
+	//res.json({ extracted_info: extractResponse.choices[0].message.content });
+	
+	json_results = { extracted_info: extractResponse.choices[0].message.content }
+	console.log(json_results)
+
+} catch (error) {
+	console.error(error);
+	res.status(500).json({ error: "Failed to process the file" });
+}
+
+
+//using only text
+// 		const messages = `return a JSON file like {
+//   "Collection Date": "24/06/2023 08:49 PM",
+//   "Report Date": "24/06/2023 09:02 PM",
+//   "Total Cholesterol":  {
+//     "Value": 8.79,
+//     "Unit": "µU/mL",
+//     "Reference Range": "<25"
+//   },
+//   "Triglycerides level":  {
+//     "Value": 8.79,
+//     "Unit": "µU/mL",
+//     "Reference Range": "<25"
+//   },
+//   "HDL Cholesterol":  {
+//     "Value": 8.79,
+//     "Unit": "µU/mL",
+//     "Reference Range": "<25"
+//   },
+//   "LDL Cholesterol":  {
+//     "Value": 8.79,
+//     "Unit": "µU/mL",
+//     "Reference Range": "<25"
+//   },
+//   "VLDL Cholesterol":  {
+//     "Value": 8.79,
+//     "Unit": "µU/mL",
+//     "Reference Range": "<25"
+//   },
+//   "LDL/HDL RATIO":  {
+//     "Value": 8.79,
+//     "Unit": "µU/mL",
+//     "Reference Range": "<25"
+//   },
+//   "Total Cholesterol/HDL RATIO":  {
+//     "Value": 8.79,
+//     "Unit": "µU/mL",
+//     "Reference Range": "<25"
+//   },
+//   "Fasting Blood Glucose": {
+// 			"Value": 80,
+// 			"Unit": "mg/dL",
+// 			"Reference Range": "60-80 mg/dL"
+// 		},
+// "Fasting Insulin": {
+//     "Value": 0,
+//     "Unit": "µU/mL",
+//     "Reference Range": "<25"
+//   }
+// } from the following free text : ` + ocrText;
+			
+			
+// 			// Call OpenAI API
+// 			const chatCompletion = await openai.chat.completions.create({
+// 				model: "gpt-3.5-turbo",
+// 				messages: [{"role": "user", "content": messages}],
+// 			});
+
+// 			json_results = chatCompletion.choices[0].message.content;
 
 	  }else{
 		console.log('dummy data')
