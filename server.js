@@ -454,7 +454,7 @@ app.get('/calc-health-score', verifyToken, async (req, res) => {
 
 			const scoreTables = {
 
-				'Waist Circumference (inches)': [  //Waist Height Ratio
+				'Waist Circumference (cm)': [  //Waist Height Ratio
 					{ range: [0.4, 0.49], score: 90 },
 					{ range: [0.5, 0.54], score: 80 },
 					{ range: [0.55, 0.59], score: 50 },
@@ -526,7 +526,7 @@ app.get('/calc-health-score', verifyToken, async (req, res) => {
 
 			const parameters = [
 
-				{ value: 'waistCircumference', label: 'Waist Circumference (inches)' },
+				{ value: 'waistCircumference', label: 'Waist Circumference (cm)' },
 				{ value: 'bloodPressureSystolic', label: 'Blood Pressure (Systolic)' },
 				{ value: 'bloodPressureDiastolic', label: 'Blood Pressure (Diastolic)' },
 				{ value: 'fastingBloodGlucose', label: 'Fasting Blood Glucose (mg/dL)' },
@@ -578,7 +578,7 @@ app.get('/calc-health-score', verifyToken, async (req, res) => {
 
 				//recalculate waistCircumference to Waist2Height ratio
 
-				parameterScoreJson.waistCircumference = 100 - ((parseFloat(parameterValues['Waist Circumference (inches)']) - 0.4) / 0.3) * 100
+				parameterScoreJson.waistCircumference = 100 - ((parseFloat(parameterValues['Waist Circumference (cm)']) - 0.4) / 0.3) * 100
 
 				//apply weighting to score
 				//Waist Circumference (Waist-to-Height Ratio)	30%
@@ -603,7 +603,7 @@ app.get('/calc-health-score', verifyToken, async (req, res) => {
 			const parameterValues = {
 				// 'Height (cm)':                    Number(results[0].height),
 				// 'Weight (kg)':                    results[0].weight,
-				'Waist Circumference (inches)': results[0].waistCircumference / Number(results[0].height),  //waist height ratio
+				'Waist Circumference (cm)': results[0].waistCircumference / Number(results[0].height),  //waist height ratio
 				'Blood Pressure (Systolic)': results[0].bloodPressureSystolic,
 				'Blood Pressure (Diastolic)': results[0].bloodPressureDiastolic,
 				'Fasting Blood Glucose (mg/dL)': results[0].fastingBloodGlucose,
@@ -1151,7 +1151,7 @@ app.post('/auth/login', async (req, res) => {
 
 		res.json({
 			token,
-			user: { id: user.UserID, email: user.UserID, name: user.name },
+			user: { id: user.UserID, email: user.UserID, name: user.name, sex: user.Sex },
 		});
 
 	} catch (error) {
