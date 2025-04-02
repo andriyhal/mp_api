@@ -225,7 +225,7 @@ app.get('/average-health-metrics', verifyToken, async (req, res) => {
 
 		// Define age and weight ranges
 		const ageRange = 5; // ±5 years
-		const weightRange = 10; // ±10 lbs
+		const weightRange = 10; // ±10 kg
 
 		const [results] = await pool.execute(
 			`SELECT 
@@ -284,19 +284,16 @@ app.get('/get-user-profile', verifyToken, async (req, res) => {
 // Endpoint to get user health data
 app.get('/get-health-data', verifyToken, async (req, res) => {
 	try {
-		const { userId } = req.query;
+		const { userId, waistHeightRatio } = req.query;
 
 		// Validate input
 		if (!userId) {
 			return res.status(400).json({ error: 'Missing required parameters: userId' });
 		}
 
+		//console.log(waistHeightRatio)
 
-
-
-		const [results] = await pool.execute(
-
-
+		let query = waistHeightRatio === '0' ?
 			`SELECT 
 			height, 
 			Weight as weight, 
@@ -308,35 +305,32 @@ app.get('/get-health-data', verifyToken, async (req, res) => {
 			Triglycerides as triglycerides, 
 			CreatedAt as lastUpdate
 		
-			
+			FROM health_data hd
+			WHERE 
+			UserID = ? ORDER BY CreatedAt DESC LIMIT 1`
+			:
+			`SELECT 
+			height, 
+			Weight as weight, 
+			ROUND(waistCircumference/height,2)  as waistCircumference,
+			BloodPressureSystolic as bloodPressureSystolic, 
+			BloodPressureDiastolic as bloodPressureDiastolic, 
+			FastingBloodGlucose as fastingBloodGlucose, 
+			HDLCholesterol as hdlCholesterol, 
+			Triglycerides as triglycerides, 
+			CreatedAt as lastUpdate
 		
 			FROM health_data hd
 			WHERE 
-			UserID = ? ORDER BY CreatedAt Desc limit 1`,
-			[userId]
+			UserID = ? ORDER BY CreatedAt DESC LIMIT 1`;
 
-			// `SELECT 
-
-			// Weight as weight, 
-			// BloodPressureSystolic as bloodPressureSystolic, 
-			// BloodPressureDiastolic as bloodPressureDiastolic, 
-			// FastingBloodGlucose as fastingBloodGlucose, 
-			// HDLCholesterol as hdlCholesterol, 
-			// Triglycerides as triglycerides, 
-			// CreatedAt as lastUpdate, 
-			// height, 
-			// waistCircumference, 
-			// vitaminD2, 
-			// vitaminD3
-			// FROM health_data hd
-			// WHERE 
-			// UserID = ? ORDER BY CreatedAt Desc limit 1`,
-			// [userId]
-		);
+		const [results] = await pool.execute(query, [userId]);
 
 		if (results.length === 0) {
 			return res.status(401).json({ error: "Invalid credentials" })
 		}
+
+		//waistCircumference is recalculated to waistHeightRatio
 
 		res.json(results[0]);
 	} catch (error) {
@@ -369,7 +363,7 @@ app.get('/get-health-history', verifyToken, async (req, res) => {
 			Triglycerides as triglycerides, 
 			CreatedAt as date, 
 			height, 
-			waistCircumference, 
+			ROUND(waistCircumference/height,2)  as waistCircumference,
 			vitaminD2, 
 			vitaminD3
 			FROM health_data hd
@@ -1205,7 +1199,7 @@ app.get('/get-reco-actions', verifyToken, async (req, res) => {
 			Triglycerides as triglycerides, 
 			CreatedAt as lastUpdate, 
 			height, 
-			waistCircumference, 
+			ROUND(waistCircumference/height,2)  as waistCircumference,
 			vitaminD2, 
 			vitaminD3
 			FROM health_data hd
@@ -1269,7 +1263,7 @@ app.get('/get-reco-actions', verifyToken, async (req, res) => {
 
 
 		const mytemp = recommendations.map(result => ({
-			title: userId !== 'all' ? `Your ${result.biomarker_name} is between ${result.range_from} - ${result.range_to}` : `${result.biomarker_name}`,
+			title: userId !== 'all' ? `Your ${result.biomarker_name === 'waistCircumference' ? 'Waist Height Ratio' : result.biomarker_name} is between ${result.range_from} - ${result.range_to}` : `${result.biomarker_name}`,
 			description: `${result.description}`,
 			linkText: "Go",
 			icon: result.type === 'supplement' ? "PillIcon" : result.type === 'paleo' ? "LeafIcon" : result.type === 'carnivore' ? "MeatIcon" : result.type === 'activity' ? "TargetIcon" : "PlayIcon",
