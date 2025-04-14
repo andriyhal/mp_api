@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Data Form</title>
+</head>
+<body>
+    <h1>User Registration</h1>
+    <form id="userRegistrationForm">
+        <label for="UserID">User ID:</label>
+        <input type="text" id="UserID" name="UserID" required><br><br>
+
+        <label for="Sex">Sex:</label>
+        <select id="Sex" name="Sex" required>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+        </select><br><br>
+
+        <label for="DateOfBirth">Date of Birth:</label>
+        <input type="date" id="DateOfBirth" name="DateOfBirth" required><br><br>
+
+        <button type="submit">Register User</button>
+    </form>
+
+    <h1>User Login</h1>
+    <form id="loginForm">
+        <label for="loginUserID">User ID:</label>
+        <input type="text" id="loginUserID" name="UserID" required><br><br>
+
+        <label for="loginPassword">Password:</label>
+        <input type="password" id="loginPassword" name="password" required><br><br>
+
+        <button type="submit">Login</button>
+    </form>
+
+    <div id="loggedInContent" style="display: none;">
+        <h1>Health Data Form</h1>
+        <form id="healthDataForm">
+            <label for="height">Height (cm):</label>
+            <input type="number" id="height" name="height" step="0.1" required><br><br>
+
+            <label for="weight">Weight (kg):</label>
+            <input type="number" id="weight" name="weight" step="0.1" required><br><br>
+
+            <label for="waistCircumference">Waist Circumference (inches):</label>
+            <input type="number" id="waistCircumference" name="waistCircumference" step="0.1" required><br><br>
+
+            <label for="bloodPressureSystolic">Blood Pressure (Systolic):</label>
+            <input type="number" id="bloodPressureSystolic" name="bloodPressureSystolic" required><br><br>
+
+            <label for="bloodPressureDiastolic">Blood Pressure (Diastolic):</label>
+            <input type="number" id="bloodPressureDiastolic" name="bloodPressureDiastolic" required><br><br>
+
+            <label for="fastingBloodGlucose">Fasting Blood Glucose (mg/dL):</label>
+            <input type="number" id="fastingBloodGlucose" name="fastingBloodGlucose" required><br><br>
+
+            <label for="hdlCholesterol">HDL Cholesterol (mg/dL):</label>
+            <input type="number" id="hdlCholesterol" name="hdlCholesterol" required><br><br>
+
+            <label for="triglycerides">Triglycerides (mg/dL):</label>
+            <input type="number" id="triglycerides" name="triglycerides" required><br><br>
+
+            <label for="vitaminD2">VitaminD2 (ng/mL):</label>
+            <input type="number" id="vitaminD2" name="vitaminD2" step="0.1" required><br><br>
+
+            <label for="vitaminD3">Vitamin D3 (ng/mL):</label>
+            <input type="number" id="vitaminD3" name="vitaminD3" step="0.1" required><br><br>
+
+            <button type="submit">Submit Health Data</button>
+        </form>
+
+    <h2>Get Average Health Metrics</h2>
+    <form id="averageMetricsForm">
+        <label for="queryAge">Age:</label>
+        <input type="number" id="queryAge" name="age" required><br><br>
+
+        <label for="querySex">Sex:</label>
+        <select id="querySex" name="sex" required>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+        </select><br><br>
+
+        <label for="queryWeight">Weight (kg):</label>
+        <input type="number" id="queryWeight" name="weight" step="0.1" required><br><br>
+
+        <button type="submit">Get Averages</button>
+    </form>
+
+    <h1>Import File</h1>
+    <form id="fileUploadForm" enctype="multipart/form-data">
+        <label for="fileUploadUserID">User ID:</label>
+        <input type="text" id="fileUploadUserID" name="UserID" required><br><br>
+
+        <label for="file">File:</label>
+        <input type="file" id="file" name="file" accept=".csv,.xlsx,.xls,.pdf,.jpg,.jpeg,.png" required><br><br>
+
+        <button type="submit">Upload File</button>
+    </form>
+
+    <h2>Get User Data Files</h2>
+    <form id="getDataFilesForm">
+        <label for="dataFilesUserID">User ID:</label>
+        <input type="text" id="dataFilesUserID" name="UserID" required><br><br>
+        <button type="submit">Get Data Files</button>
+    </form>
+
+    <div id="uploadResult"></div>
+    <div id="results"></div>
+    <div id="dataFilesResult"></div>
+
+    <script>
+
+let token = localStorage.getItem('token');
+
+function updateUI() {
+    const loggedInContent = document.getElementById('loggedInContent');
+    if (token) {
+        loggedInContent.style.display = 'block';
+    } else {
+        loggedInContent.style.display = 'none';
+    }
+}
+
+updateUI();
+
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const loginData = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(loginData),
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    token = data.token;
+                    localStorage.setItem('token', token);
+                    alert('Login successful!');
+                    updateUI();
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred during login.');
+            }
+        });
+
+        document.getElementById('userRegistrationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const userData = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/register-user', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(userData),
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('User registered successfully!');
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while registering user.');
+            }
+        });
+
+        document.getElementById('healthDataForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const healthData = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/submit-health-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(healthData),
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('Health data submitted successfully!');
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while submitting health data.');
+            }
+        });
+
+        document.getElementById('averageMetricsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const queryParams = new URLSearchParams(formData);
+
+            try {
+                const response = await fetch(`/average-health-metrics?${queryParams}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('results').innerHTML = `
+                        <h3>Average Health Metrics:</h3>
+                        <p>Systolic Blood Pressure: ${data.avgSystolic.toFixed(2)}</p>
+                        <p>Diastolic Blood Pressure: ${data.avgDiastolic.toFixed(2)}</p>
+                        <p>Fasting Blood Glucose: ${data.avgGlucose.toFixed(2)} mg/dL</p>
+                        <p>HDL Cholesterol: ${data.avgHDL.toFixed(2)} mg/dL</p>
+                        <p>Triglycerides: ${data.avgTriglycerides.toFixed(2)} mg/dL</p>
+                        <p>Vitamin D2: ${data.avgVitaminD2.toFixed(2)} ng/mL</p>
+                        <p>Vitamin D3: ${data.avgVitaminD3.toFixed(2)} ng/mL</p>
+                    `;
+                } else {
+                    document.getElementById('results').innerHTML = `<p>Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('results').innerHTML = '<p>An error occurred while fetching data.</p>';
+            }
+        });
+
+        document.getElementById('fileUploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+
+            try {
+                const response = await fetch('/import-file', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData,
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    let resultHTML = `
+                        <p>File uploaded successfully!</p>
+                        <p>File saved to: ${data.filePath}</p>
+                    `;
+                    if (data.ocrText) {
+                        resultHTML += `
+                            <p>OCR Text Preview:</p>
+                            <pre>${data.ocrText}</pre>
+                        `;
+                    }
+                    document.getElementById('uploadResult').innerHTML = resultHTML;
+                } else {
+                    document.getElementById('uploadResult').innerHTML = `<p>Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('uploadResult').innerHTML = '<p>An error occurred while uploading the file.</p>';
+            }
+        });
+
+        document.getElementById('getDataFilesForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            try {
+                const response = await fetch('/get-data-files', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                });
+                const data = await response.json();
+        
+                if (response.ok) {
+                    let resultHTML = '<h3>User Data Files:</h3>';
+                    if (data.length === 0) {
+                        resultHTML += '<p>No files found for this user.</p>';
+                    } else {
+                        resultHTML += '<ul>';
+                        data.forEach(file => {
+                            resultHTML += `
+                                <li>
+                                    <strong>Filename:</strong> ${file.filename}<br>
+                                    <strong>Type:</strong> ${file.file_type}<br>
+                                    <strong>Path:</strong> ${file.file_path}<br>
+                                    <strong>Uploaded at:</strong> ${new Date(file.uploaded_at).toLocaleString()}
+                                </li>
+                            `;
+                        });
+                        resultHTML += '</ul>';
+                    }
+                    document.getElementById('dataFilesResult').innerHTML = resultHTML;
+                } else {
+                    document.getElementById('dataFilesResult').innerHTML = `<p>Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('dataFilesResult').innerHTML = '<p>An error occurred while fetching data files.</p>';
+            }
+        });
+    </script>
+</body>
+</html>
+
