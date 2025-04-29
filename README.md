@@ -60,10 +60,19 @@ npm install
 3.  Create a `.env` file in the root directory with the following variables:
 
 ```plaintext
-NEXT_PUBLIC_API_ROOT=http://localhost:4000
-NEXT_PUBLIC_LOGIN_AUTOCOMPLETE_USER=
-NEXT_PUBLIC_LOGIN_AUTOCOMPLETE_PASSWORD=
-NEXT_PUBLIC_DISABLE_SIGNUP=false
+PORT=4000
+DB_HOST=
+DB_USER=
+DB_PASSWORD=
+DB_NAME=
+
+OPENAI_API_X_API_KEY=
+
+JWT_SECRET=
+
+ENABLE_OPENAI_SCORE=false
+ENABLE_OPENAI_DATA_EXTRACTION=true
+
 # Add any other environment variables here
 ```
 
