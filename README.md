@@ -15,7 +15,7 @@ A comprehensive API for managing health data, biomarkers, and recommendations wi
 - [API Documentation](#api-documentation)
 - [Authentication](#authentication)
 - [File Upload and OCR](#file-upload-and-ocr)
-- [License](#license)
+
 
 ## Overview
 
