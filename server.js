@@ -78,7 +78,10 @@ const pool = mysql.createPool({
 	database: process.env.DB_NAME,
 	waitForConnections: true,
 	connectionLimit: 10,
-	queueLimit: 0
+	queueLimit: 0,
+	ssl: {
+		rejectUnauthorized: false
+	}
 });
 
 // Route to handle user registration
@@ -1111,8 +1114,6 @@ app.post('/auth/login', async (req, res) => {
 		if (user.login_attempts >= 5 && user.last_login_attempt > Date.now() - 15 * 60 * 1000) {
 			return res.status(403).json({ error: "Account is locked. Please try again later." })
 		}
-
-
 
 		const isPasswordValid = await bcrypt.compare(password, user.password)
 

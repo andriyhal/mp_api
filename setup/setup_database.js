@@ -13,6 +13,9 @@ async function setupDatabase() {
             host: process.env.DB_HOST,
             user: process.env.DB_USER,
             password: process.env.DB_PASSWORD,
+            ssl: {
+                rejectUnauthorized: false 
+            }
         })
 
         console.log("Connected to MySQL server")
@@ -25,7 +28,7 @@ async function setupDatabase() {
         await connection.query(`USE ${process.env.DB_NAME}`)
 
         // Read the SQL file
-        const sqlFilePath = path.join(process.cwd(), "initialize_database.sql")
+        const sqlFilePath = path.join(process.cwd(), "example_database.sql")
         const sqlScript = fs.readFileSync(sqlFilePath, "utf8")
 
         // Split the SQL script into individual statements
