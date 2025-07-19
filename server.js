@@ -439,7 +439,7 @@ app.get('/calc-health-score', verifyToken, async (req, res) => {
 
 			// Call OpenAI API
 			const chatCompletion = await openai.chat.completions.create({
-				model: "gpt-3.5-turbo",
+				model: "gpt-4o",
 				messages: [{ "role": "user", "content": messages }],
 			});
 			//console.log(chatCompletion.choices[0].message);
@@ -768,7 +768,7 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 
 				// Use GPT-4 Turbo for text-based PDFs
 				const extractResponse = await openai.chat.completions.create({
-					model: "gpt-3.5-turbo", //gpt-3.5-turbo gpt-4o
+					model: "gpt-4o", //gpt-3.5-turbo gpt-4o
 					messages: [
 						{
 							role: "system", content: `extract the relevant data from the content and the following a json string with the correct values where "Fasting Blood Glucose" equals "Blood Glucose".  If no data is found return 0 for that parameter.  Return a properly formated JSON string that can be parsed in a format like '{
@@ -987,7 +987,13 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 		// ); 
 
 		//const jsonData = JSON.parse(json_results);
-		const jsonData = JSON.parse(json_results.replace(/^.*?({.*}).*$/g, '$1'));  //remove any post and pre text from {...} openAI adding ```json ..... ```
+		var rawJson = json_results
+  						.replace(/^'+|'+$/g, '')            // remove outer single quotes
+  						.replace(/^```json|```$/g, '')      // remove markdown code block
+  						.replace(/\\n/g, '')                // remove \n line breaks
+  						.replace(/\\"/g, '"');  
+
+		const jsonData = JSON.parse(rawJson);  //remove any post and pre text from {...} openAI adding ```json ..... ```
 
 		const json_results_template = {
 			"Collection Date": "",
