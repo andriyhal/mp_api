@@ -180,12 +180,10 @@ app.post('/submit-health-data', verifyToken, async (req, res) => {
 // Endpoint to get average health metrics
 app.get('/average-health-metrics', verifyToken, async (req, res) => {
 	try {
-		var { age, sex, weight } = req.query;
-
-
+		var { age, sex } = req.query;
 
 		// Validate input
-		if (!age || !sex || !weight) {
+		if (!age || !sex ) {
 
 			const decodedToken = jwt.verify(req.headers['authorization'].split(' ')[1], process.env.JWT_SECRET);
 			const userId = decodedToken.email;
@@ -205,49 +203,37 @@ app.get('/average-health-metrics', verifyToken, async (req, res) => {
 					}
 				}
 			}
-			if (!weight) {
-				const [weightResults] = await pool.execute(
-					`SELECT weight FROM health_data WHERE UserID = ? ORDER BY CreatedAt DESC LIMIT 1`,
-					[userId]
-				);
-				if (weightResults.length > 0) {
-					weight = weightResults[0].weight;
-				}
-			}
 		}
 
 
 
 		// Convert age and weight to numbers and apply some basic validation
 		const ageNum = parseInt(age, 10);
-		const weightNum = parseFloat(weight);
 
-		if (isNaN(ageNum) || isNaN(weightNum) || ageNum <= 0 || weightNum <= 0) {
-			return res.status(400).json({ error: 'Invalid age or weight' });
+		if (isNaN(ageNum) || ageNum <= 0) {
+			return res.status(400).json({ error: 'Invalid age' });
 		}
 
-		// Define age and weight ranges
-		const ageRange = 5; // ±5 years
-		const weightRange = 10; // ±10 kg
-
 		const [results] = await pool.execute(
-			`SELECT 
-			AVG(hd.bloodPressureSystolic)  	as bloodPressureSystolic,
-			AVG(hd.bloodPressureDiastolic) 	as bloodPressureDiastolic,
-			AVG(hd.fastingBloodGlucose) 	as fastingBloodGlucose, 
-			AVG(hd.hdlCholesterol) 			as hdlCholesterol,  
-			AVG(hd.triglycerides) 			as triglycerides,       
-			AVG(hd.vitaminD2) 				as vitaminD2,        
-			AVG(hd.vitaminD3) 				as vitaminD3            
-			FROM health_data hd
-			JOIN users u ON hd.UserID = u.UserID
-			WHERE 
-			u.Sex = ? AND
-			TIMESTAMPDIFF(YEAR, u.DateOfBirth, CURDATE()) BETWEEN ? AND ? AND
-			hd.weight BETWEEN ? AND ?`,
-			[sex, ageNum - ageRange, ageNum + ageRange, weightNum - weightRange, weightNum + weightRange]
+			`
+			SELECT
+				weight					as weight,
+				height					as height,
+				waist					as waistCircumference,
+				BP_Systolic 			as bloodPressureSystolic,
+				BP_Diastolic			as bloodPressureDiastolic,
+				Fasting_Blood_Glucose 	as fastingBloodGlucose,
+				HDL_Cholesterol			as hdlCholesterol,
+				Triglycerides			as triglycerides
+			FROM average_health_data
+			WHERE 	
+					sex = ? AND
+					age_from <= ? AND
+					age_to >= ?
+			`,
+			[(sex == 'male' ? 0:1) ,ageNum,ageNum]
 		);
-
+			
 		res.json(results[0]);
 	} catch (error) {
 		console.error('Error fetching average health metrics:', error);
