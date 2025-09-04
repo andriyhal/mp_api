@@ -17,14 +17,23 @@ import pdfParse from "pdf-parse";
 
 dotenv.config();
 
+// ...existing code...
+
+// Import recommendation route
+import recommendationRouter from './routes/recommendation.js';
+import digitalJourneyRouter from './routes/digitalJourney.js';
+import providerNetworkRouter from './routes/providerNetwork.js';
+
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Serve static images for products (must be after app is initialized)
+app.use('/images', express.static(path.join(process.cwd(), 'images')));
 
 // enabling CORS for some specific origins only.
 let corsOptions = {
 	origin: ['http://localhost:3000', 'https://metabolicpoint.insolutionsoftware.co.uk'],
 }
-
 
 
 // Initialize OpenAI API
@@ -52,6 +61,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
+
+// Mount the recommendation API
+app.use('/recommendation', recommendationRouter);
+
+// Mount digital journey and provider network APIs
+app.use('/digital-journey', digitalJourneyRouter);
+app.use('/provider-network', providerNetworkRouter);
 
 // Middleware to verify JWT
 const verifyToken = (req, res, next) => {
@@ -108,7 +124,7 @@ app.post("/register-user", async (req, res) => {
 		const hashedPassword = await bcrypt.hash(password, 10)
 
 		const [result] = await pool.execute(
-			`INSERT INTO users (UserID, name, password) VALUES (?, ?, ?)`,
+			`INSERT INTO users (UserID, name, password, DateOfBirth, Sex) VALUES (?, ?, ?, '1990-01-01', 'Other')`,
 			[email, name, hashedPassword],
 		)
 
@@ -1027,14 +1043,79 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 			[UserID, combinedData["Blood Glucose"].Value, combinedData["HDL Cholesterol"].Value, combinedData["Triglycerides level"].Value, results2[0].height, results2[0].weight, results2[0].waistCircumference, results2[0].bloodPressureSystolic, results2[0].bloodPressureDiastolic]
 		);
 
+		// Calculate and store biomarker scores after inserting health data
+		const [biomarkers] = await pool.execute(`SELECT id, name FROM biomarkers`);
+		let userScores = {};
+		let generalScore = 0;
 
+		for (const bio of biomarkers) {
+			let value = null;
+			
+			// Map biomarker names to health_data columns
+			switch(bio.name) {
+				case 'waistCircumference':
+					// Calculate Waist-to-Height Ratio for scoring
+					const waist = results2[0].waistCircumference;
+					const height = results2[0].height;
+					if (waist && height && height > 0) {
+						value = waist / height;
+					}
+					break;
+				case 'bloodPressureSystolic':
+					value = results2[0].bloodPressureSystolic;
+					break;
+				case 'bloodPressureDiastolic':
+					value = results2[0].bloodPressureDiastolic;
+					break;
+				case 'fastingBloodGlucose':
+					value = combinedData["Blood Glucose"].Value;
+					break;
+				case 'hdlCholesterol':
+					value = combinedData["HDL Cholesterol"].Value;
+					break;
+				case 'triglycerides':
+					value = combinedData["Triglycerides level"].Value;
+					break;
+			}
+
+			if (value !== undefined && value !== null) {
+				const [scoreRows] = await pool.execute(
+					`SELECT score FROM biomarker_scores WHERE biomarker_id = ? AND (range_from IS NULL OR ? >= range_from) AND (range_to IS NULL OR ? <= range_to) ORDER BY score ASC LIMIT 1`,
+					[bio.id, value, value]
+				);
+				if (scoreRows.length > 0) {
+					userScores[bio.id] = scoreRows[0].score;
+					// Store in user_scores table
+					await pool.execute(
+						`INSERT INTO user_scores (user_id, biomarker_id, score) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE score = VALUES(score), calculated_at = CURRENT_TIMESTAMP`,
+						[UserID, bio.id, scoreRows[0].score]
+					);
+				}
+			}
+		}
+
+		// Calculate general health score
+		const waistScore = userScores[1] || 0; // waistCircumference (WHtR)
+		const bpScore = ((userScores[2] || 0) + (userScores[3] || 0)) / 2; // Average of systolic and diastolic
+		const hdlScore = userScores[5] || userScores[6] || 0; // HDL (male or female)
+		const trigScore = userScores[7] || 0; // Triglycerides
+		const fbgScore = userScores[4] || 0; // Fasting Blood Glucose
+		generalScore = (waistScore * 0.3) + (bpScore * 0.2) + (hdlScore * 0.15) + (trigScore * 0.2) + (fbgScore * 0.15);
+
+		// Update user's general health score
+		await pool.execute(
+			`UPDATE users SET general_health_score = ? WHERE UserID = ?`,
+			[generalScore, UserID]
+		);
 
 		res.status(201).json({
 			message: 'File uploaded successfully',
 			id: result.insertId,
 			filePath,
 			//ocrText: ocrText ? ocrText.substring(0, 100) + '...' : null // Send a preview of OCR text
-			ocrText: JSON.stringify(combinedData)
+			ocrText: JSON.stringify(combinedData),
+			generalHealthScore: generalScore,
+			biomarkerScores: userScores
 		});
 	} catch (error) {
 		console.error('Error uploading file:', error);
