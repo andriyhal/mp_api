@@ -1,0 +1,100 @@
+# API Example Requests and Responses
+
+## 1. Marketplace Recommendations
+
+### Request (unauthenticated)
+GET /recommendation
+
+### Response
+{
+  "grouped": {
+    "supplement": [
+      {
+        "id": 3,
+        "name": "Magnesium (200–400 mg/day)",
+        "description": "Essential mineral for muscle and nerve function. Supports energy production and bone health.",
+        "type": "supplement",
+        "price": 15.99,
+        "image_url": "http://localhost:3000/images/magnesium.jpg",
+        "digital_url": null,
+        "public_visible": 1,
+        "created_at": "2025-08-19T10:00:00.000Z",
+        "priority": 1,
+        "range_from": null,
+        "range_to": 40,
+        "biomarker_name": "hdlCholesterol"
+      }
+      // ...more products
+    ],
+    // ...other product types
+  },
+  "isAuthenticated": false
+}
+
+---
+
+## 2. Digital Journey (user's assigned plan)
+
+### Request (authenticated)
+GET /digital-journey
+Authorization: Bearer <token>
+
+### Response
+{
+  "plan": {
+    "user_plan_id": 1,
+    "plan_name": "Starter Wellness Plan",
+    "assigned_at": "2025-08-19T10:00:00.000Z"
+  },
+  "items": [
+    {
+      "scheduled_date": "2025-08-20",
+      "name": "Morning Yoga",
+      "description": "Start your day with 20 minutes of yoga.",
+      "type": "sport",
+      "image_url": "http://localhost:3000/images/yoga.jpg",
+      "content_url": "https://example.com/yoga"
+    },
+    // ...more items
+  ]
+}
+
+---
+
+## 3. Provider Network (recommended providers)
+
+### Request (authenticated)
+GET /provider-network
+Authorization: Bearer <token>
+
+### Response
+{
+  "providers": [
+    {
+      "id": 1,
+      "name": "Dr. Alice Smith",
+      "title": "MD",
+      "image_url": "http://localhost:3000/images/alice.jpg",
+      "booking_url": "https://example.com/book/alice",
+      "expertise_type_id": 1,
+      "expertise_type": "Physician"
+    },
+    // ...more providers
+  ]
+}
+
+---
+
+## 4. Error Example
+
+### Response
+{
+  "error": "An error occurred while fetching digital journey."
+}
+
+---
+
+# Notes
+- All image URLs are fully qualified and point to the /images/ folder on the server.
+- Authenticated requests require a valid JWT token in the Authorization header.
+- For biomarker-driven recommendations, the response may include biomarker_name, range_from, and range_to for context.
