@@ -27,6 +27,18 @@ const verifyToken = (req, res, next) => {
     });
 };
 
+// GET /provider-network/cleanup - Clean up duplicate expertise types for the user
+router.get('/cleanup', verifyToken, async (req, res) => {
+    try {
+        const userId = req.userId;
+        const result = await cleanupDuplicateExpertiseTypes(userId);
+        res.json(result);
+    } catch (error) {
+        console.error('Error cleaning up expertise duplicates:', error);
+        res.status(500).json({ error: 'An error occurred while cleaning up duplicates.' });
+    }
+});
+
 // GET /provider-network - Get recommended providers for the user
 router.get('/', verifyToken, async (req, res) => {
     try {
@@ -65,10 +77,52 @@ router.get('/', verifyToken, async (req, res) => {
 
 export default router;
 
+// Function to clean up duplicate expertise types for a user
+export async function cleanupDuplicateExpertiseTypes(userId) {
+    try {
+        // Find and remove duplicates, keeping only the first occurrence of each expertise type
+        const [duplicates] = await pool.execute(`
+            SELECT expertise_type_id, COUNT(*) as count, MIN(id) as keep_id
+            FROM user_expertise_types 
+            WHERE user_id = ?
+            GROUP BY expertise_type_id 
+            HAVING COUNT(*) > 1
+        `, [userId]);
+        
+        if (duplicates.length === 0) {
+            return { success: true, message: 'No duplicates found' };
+        }
+        
+        // Delete duplicate entries
+        for (const dup of duplicates) {
+            await pool.execute(`
+                DELETE FROM user_expertise_types 
+                WHERE user_id = ? AND expertise_type_id = ? AND id != ?
+            `, [userId, dup.expertise_type_id, dup.keep_id]);
+        }
+        
+        return { success: true, message: `Cleaned up ${duplicates.length} duplicate expertise type entries` };
+    } catch (error) {
+        console.error('Error cleaning up expertise duplicates:', error);
+        return { success: false, message: error.message };
+    }
+}
+
 // Function to assign expertise types to a user based on biomarker scores
 export async function assignExpertiseTypesForUser(userId, userBiomarkers) {
     // userBiomarkers: { biomarker_id: value, ... }
     try {
+        // Check if user already has expertise types assigned
+        const [existingTypes] = await pool.execute(
+            `SELECT expertise_type_id FROM user_expertise_types WHERE user_id = ?`,
+            [userId]
+        );
+        
+        if (existingTypes.length > 0) {
+            console.log('User already has expertise types assigned, skipping assignment');
+            return existingTypes.map(t => t.expertise_type_id);
+        }
+
         // First, calculate scores for the user
         const userScores = {};
         for (const biomarkerId in userBiomarkers) {
@@ -96,12 +150,15 @@ export async function assignExpertiseTypesForUser(userId, userBiomarkers) {
                 assignedTypes.add(row.expertise_type_id);
             }
         }
+        
         for (const typeId of assignedTypes) {
             await pool.execute(
                 `INSERT INTO user_expertise_types (user_id, expertise_type_id) VALUES (?, ?)`,
                 [userId, typeId]
             );
         }
+        
+        console.log(`Assigned ${assignedTypes.size} expertise types to user ${userId}`);
         return Array.from(assignedTypes);
     } catch (error) {
         console.error('Error assigning expertise types:', error);
