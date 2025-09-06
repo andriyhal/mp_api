@@ -28,6 +28,18 @@ const verifyToken = (req, res, next) => {
     });
 };
 
+// GET /digital-journey/cleanup - Clean up duplicate items for the user
+router.get('/cleanup', verifyToken, async (req, res) => {
+    try {
+        const userId = req.userId;
+        const result = await cleanupDuplicatePlanItems(userId);
+        res.json(result);
+    } catch (error) {
+        console.error('Error cleaning up duplicates:', error);
+        res.status(500).json({ error: 'An error occurred while cleaning up duplicates.' });
+    }
+});
+
 // GET /digital-journey - Get user's assigned plan (digital items ordered by scheduled_date)
 router.get('/', verifyToken, async (req, res) => {
     try {
@@ -68,10 +80,64 @@ router.get('/', verifyToken, async (req, res) => {
 
 export default router;
 
+// Function to clean up duplicate items in user digital plan items
+export async function cleanupDuplicatePlanItems(userId) {
+    try {
+        // Get user's plan
+        const [userPlans] = await pool.execute(
+            `SELECT id as user_plan_id FROM user_digital_plans WHERE user_id = ?`,
+            [userId]
+        );
+        
+        if (userPlans.length === 0) {
+            return { success: false, message: 'No plan found for user' };
+        }
+        
+        const userPlanId = userPlans[0].user_plan_id;
+        
+        // Find and remove duplicates, keeping only the first occurrence of each item
+        const [duplicates] = await pool.execute(`
+            SELECT item_id, scheduled_date, COUNT(*) as count, MIN(id) as keep_id
+            FROM user_digital_plan_items 
+            WHERE user_plan_id = ?
+            GROUP BY item_id, scheduled_date 
+            HAVING COUNT(*) > 1
+        `, [userPlanId]);
+        
+        if (duplicates.length === 0) {
+            return { success: true, message: 'No duplicates found' };
+        }
+        
+        // Delete duplicate entries
+        for (const dup of duplicates) {
+            await pool.execute(`
+                DELETE FROM user_digital_plan_items 
+                WHERE user_plan_id = ? AND item_id = ? AND scheduled_date = ? AND id != ?
+            `, [userPlanId, dup.item_id, dup.scheduled_date, dup.keep_id]);
+        }
+        
+        return { success: true, message: `Cleaned up ${duplicates.length} duplicate item groups` };
+    } catch (error) {
+        console.error('Error cleaning up duplicates:', error);
+        return { success: false, message: error.message };
+    }
+}
+
 // Function to assign a digital plan to a user based on biomarker scores
 export async function assignDigitalPlanForUser(userId, userBiomarkers) {
     // userBiomarkers: { biomarker_id: value, ... }
     try {
+        // Check if user already has a plan assigned
+        const [existingPlans] = await pool.execute(
+            `SELECT id FROM user_digital_plans WHERE user_id = ?`,
+            [userId]
+        );
+        
+        if (existingPlans.length > 0) {
+            console.log('User already has a digital plan assigned, skipping assignment');
+            return existingPlans[0].id;
+        }
+
         // First, calculate scores for the user
         const userScores = {};
         for (const biomarkerId in userBiomarkers) {
@@ -100,18 +166,24 @@ export async function assignDigitalPlanForUser(userId, userBiomarkers) {
                 break;
             }
         }
-        if (!selectedPlanId) return null;
+        if (!selectedPlanId) {
+            console.log('No suitable plan found for user scores');
+            return null;
+        }
+        
         // Assign plan to user
         const [result] = await pool.execute(
             `INSERT INTO user_digital_plans (user_id, plan_id) VALUES (?, ?)`,
             [userId, selectedPlanId]
         );
         const userPlanId = result.insertId;
+        
         // Get plan items and schedule them (T+day_offset from today)
         const [planItems] = await pool.execute(
             `SELECT item_id, day_offset FROM digital_plan_items WHERE plan_id = ?`,
             [selectedPlanId]
         );
+        
         const today = new Date();
         for (const item of planItems) {
             const scheduledDate = new Date(today);
@@ -121,6 +193,8 @@ export async function assignDigitalPlanForUser(userId, userBiomarkers) {
                 [userPlanId, item.item_id, scheduledDate.toISOString().slice(0, 10)]
             );
         }
+        
+        console.log(`Assigned digital plan ${selectedPlanId} to user ${userId} with ${planItems.length} items`);
         return userPlanId;
     } catch (error) {
         console.error('Error assigning digital plan:', error);

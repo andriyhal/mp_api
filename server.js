@@ -21,8 +21,8 @@ dotenv.config();
 
 // Import recommendation route
 import recommendationRouter from './routes/recommendation.js';
-import digitalJourneyRouter from './routes/digitalJourney.js';
-import providerNetworkRouter from './routes/providerNetwork.js';
+import digitalJourneyRouter, { assignDigitalPlanForUser } from './routes/digitalJourney.js';
+import providerNetworkRouter, { assignExpertiseTypesForUser } from './routes/providerNetwork.js';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -1107,6 +1107,26 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 			`UPDATE users SET general_health_score = ? WHERE UserID = ?`,
 			[generalScore, UserID]
 		);
+
+		// Automatically assign digital journey plan based on biomarker scores
+		console.log('Assigning digital journey plan for user:', UserID, 'with scores:', userScores);
+		try {
+			const planId = await assignDigitalPlanForUser(UserID, userScores);
+			console.log('Digital journey plan assigned:', planId);
+		} catch (error) {
+			console.error('Error assigning digital journey plan:', error);
+			// Don't fail the file upload if digital journey assignment fails
+		}
+
+		// Automatically assign expertise types based on biomarker scores
+		console.log('Assigning expertise types for user:', UserID, 'with scores:', userScores);
+		try {
+			const expertiseTypes = await assignExpertiseTypesForUser(UserID, userScores);
+			console.log('Expertise types assigned:', expertiseTypes);
+		} catch (error) {
+			console.error('Error assigning expertise types:', error);
+			// Don't fail the file upload if expertise assignment fails
+		}
 
 		res.status(201).json({
 			message: 'File uploaded successfully',

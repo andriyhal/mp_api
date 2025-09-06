@@ -62,7 +62,7 @@ create table digital_items
         primary key,
     name        varchar(255)                                   not null,
     description text                                           not null,
-    type        enum ('sport', 'stress', 'nutrition', 'other') not null,
+    type        enum ('sport', 'stress', 'nutrition','education','medical','sleep','other') not null,
     image_url   varchar(512)                                   null,
     content_url varchar(512)                                   null,
     created_at  timestamp default CURRENT_TIMESTAMP            not null
