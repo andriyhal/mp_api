@@ -23,6 +23,7 @@ dotenv.config();
 import recommendationRouter from './routes/recommendation.js';
 import digitalJourneyRouter, { assignDigitalPlanForUser } from './routes/digitalJourney.js';
 import providerNetworkRouter, { assignExpertiseTypesForUser } from './routes/providerNetwork.js';
+import userScoresRouter from './routes/userScores.js';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -68,6 +69,9 @@ app.use('/recommendation', recommendationRouter);
 // Mount digital journey and provider network APIs
 app.use('/digital-journey', digitalJourneyRouter);
 app.use('/provider-network', providerNetworkRouter);
+
+// Mount user scores API
+app.use('/user-scores', userScoresRouter);
 
 // Middleware to verify JWT
 const verifyToken = (req, res, next) => {
@@ -1048,10 +1052,104 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 		let userScores = {};
 		let generalScore = 0;
 
+		// Get user sex
+		let sex = results0[0].Sex;
+		if (sex === 'Other') {
+			sex = 'Male';
+		}
+
+		// Define score tables and parameters
+		const scoreTables = {
+			'Waist Circumference (cm)': [
+				{ range: [0.4, 0.49], score: 90 },
+				{ range: [0.5, 0.54], score: 80 },
+				{ range: [0.55, 0.59], score: 50 },
+				{ range: [0.6, 0.69], score: 20 },
+				{ range: '<0.4', score: 100 },
+				{ range: '>0.7', score: 0 }
+			],
+			'Blood Pressure (Systolic)': [
+				{ range: [90, 120], score: 100 },
+				{ range: [121, 130], score: 90 },
+				{ range: [131, 140], score: 80 },
+				{ range: [141, 160], score: 60 },
+				{ range: '>160', score: 40 },
+				{ range: '<90', score: 70 }
+			],
+			'Blood Pressure (Diastolic)': [
+				{ range: [60, 80], score: 100 },
+				{ range: [81, 85], score: 90 },
+				{ range: [86, 90], score: 80 },
+				{ range: [91, 100], score: 60 },
+				{ range: '>100', score: 40 },
+				{ range: '<60', score: 70 }
+			],
+			'Fasting Blood Glucose (mg/dL)': [
+				{ range: [85, 89], score: 90 },
+				{ range: [90, 99], score: 80 },
+				{ range: [100, 109], score: 60 },
+				{ range: [110, 125], score: 40 },
+				{ range: '>126', score: 20 },
+				{ range: '<85', score: 100 }
+			],
+			'Male HDL Cholesterol (mg/dL)': [
+				{ range: [50, 59], score: 90 },
+				{ range: [40, 49], score: 80 },
+				{ range: [30, 39], score: 60 },
+				{ range: '>60', score: 100 },
+				{ range: '<30', score: 40 }
+			],
+			'Female HDL Cholesterol (mg/dL)': [
+				{ range: [55, 59], score: 90 },
+				{ range: [45, 54], score: 80 },
+				{ range: [30, 44], score: 60 },
+				{ range: '>60', score: 100 },
+				{ range: '<30', score: 40 }
+			],
+			'Triglycerides (mg/dL)': [
+				{ range: [80, 99], score: 90 },
+				{ range: [100, 149], score: 80 },
+				{ range: [150, 199], score: 60 },
+				{ range: [200, 299], score: 40 },
+				{ range: '<80', score: 100 },
+				{ range: '>300', score: 20 }
+			]
+		};
+
+		const parameters = [
+			{ value: 'waistCircumference', label: 'Waist Circumference (cm)' },
+			{ value: 'bloodPressureSystolic', label: 'Blood Pressure (Systolic)' },
+			{ value: 'bloodPressureDiastolic', label: 'Blood Pressure (Diastolic)' },
+			{ value: 'fastingBloodGlucose', label: 'Fasting Blood Glucose (mg/dL)' },
+			{ value: 'hdlCholesterol', label: sex + ' HDL Cholesterol (mg/dL)' },
+			{ value: 'triglycerides', label: 'Triglycerides (mg/dL)' }
+		];
+
+		function calcScore(value, table, label) {
+			if (label === 'Blood Pressure (Diastolic)' && value >= 81 && value <= 85) {
+				return 90 - (value - 81) * 2.673;
+			}
+			for (const row of table) {
+				const { range, score } = row;
+				if (typeof range === 'string') {
+					if (range.startsWith('<') && value < parseFloat(range.slice(1))) {
+						return score;
+					}
+					if (range.startsWith('>') && value > parseFloat(range.slice(1))) {
+						return score;
+					}
+				} else if (Array.isArray(range) && value >= range[0] && value <= range[1]) {
+					return score;
+				}
+			}
+			return 0;
+		}
+
 		for (const bio of biomarkers) {
 			let value = null;
-			
-			// Map biomarker names to health_data columns
+			let label = null;
+
+			// Map biomarker names to health_data columns and labels
 			switch(bio.name) {
 				case 'waistCircumference':
 					// Calculate Waist-to-Height Ratio for scoring
@@ -1060,35 +1158,39 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 					if (waist && height && height > 0) {
 						value = waist / height;
 					}
+					label = 'Waist Circumference (cm)';
 					break;
 				case 'bloodPressureSystolic':
 					value = results2[0].bloodPressureSystolic;
+					label = 'Blood Pressure (Systolic)';
 					break;
 				case 'bloodPressureDiastolic':
 					value = results2[0].bloodPressureDiastolic;
+					label = 'Blood Pressure (Diastolic)';
 					break;
 				case 'fastingBloodGlucose':
 					value = combinedData["Blood Glucose"].Value;
+					label = 'Fasting Blood Glucose (mg/dL)';
 					break;
 				case 'hdlCholesterol':
 					value = combinedData["HDL Cholesterol"].Value;
+					label = sex + ' HDL Cholesterol (mg/dL)';
 					break;
 				case 'triglycerides':
 					value = combinedData["Triglycerides level"].Value;
+					label = 'Triglycerides (mg/dL)';
 					break;
 			}
 
-			if (value !== undefined && value !== null) {
-				const [scoreRows] = await pool.execute(
-					`SELECT score FROM biomarker_scores WHERE biomarker_id = ? AND (range_from IS NULL OR ? >= range_from) AND (range_to IS NULL OR ? <= range_to) ORDER BY score ASC LIMIT 1`,
-					[bio.id, value, value]
-				);
-				if (scoreRows.length > 0) {
-					userScores[bio.id] = scoreRows[0].score;
+			if (value !== undefined && value !== null && label) {
+				const table = scoreTables[label];
+				if (table) {
+					const score = calcScore(value, table, label);
+					userScores[bio.id] = score;
 					// Store in user_scores table
 					await pool.execute(
 						`INSERT INTO user_scores (user_id, biomarker_id, score) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE score = VALUES(score), calculated_at = CURRENT_TIMESTAMP`,
-						[UserID, bio.id, scoreRows[0].score]
+						[UserID, bio.id, score]
 					);
 				}
 			}
