@@ -23,7 +23,7 @@ dotenv.config();
 import recommendationRouter from './routes/recommendation.js';
 import digitalJourneyRouter, { assignDigitalPlanForUser } from './routes/digitalJourney.js';
 import providerNetworkRouter, { assignExpertiseTypesForUser } from './routes/providerNetwork.js';
-import userScoresRouter from './routes/userScores.js';
+import userScoresRouter, { calculateAndStoreUserScores } from './routes/userScores.js';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -453,176 +453,24 @@ app.get('/calc-health-score', verifyToken, async (req, res) => {
 			// Send OpenAI's response back to the client
 			res.json(chatCompletion.choices[0].message.content)
 		} else {
-			//calculate score from excel formula
-
-			const scoreTables = {
-
-				'Waist Circumference (cm)': [  //Waist Height Ratio
-					{ range: [0.4, 0.49], score: 90 },
-					{ range: [0.5, 0.54], score: 80 },
-					{ range: [0.55, 0.59], score: 50 },
-					{ range: [0.6, 0.69], score: 20 },
-					{ range: '<0.4', score: 100 },
-					{ range: '>0.7', score: 0 }
-				],
-
-
-				'Blood Pressure (Systolic)': [
-					{ range: [90, 120], score: 100 },
-					{ range: [121, 130], score: 90 },
-					{ range: [131, 140], score: 80 },
-					{ range: [141, 160], score: 60 },
-					{ range: '>160', score: 40 },
-					{ range: '<90', score: 70 }
-				],
-				'Blood Pressure (Diastolic)': [
-					{ range: [60, 80], score: 100 },
-					{ range: [81, 85], score: 90 },
-					{ range: [86, 90], score: 80 },
-					{ range: [91, 100], score: 60 },
-					{ range: '>100', score: 40 },
-					{ range: '<60', score: 70 }
-				],
-				'Fasting Blood Glucose (mg/dL)': [
-					{ range: [85, 89], score: 90 },
-					{ range: [90, 99], score: 80 },
-					{ range: [100, 109], score: 60 },
-					{ range: [110, 125], score: 40 },
-					{ range: '>126', score: 20 },
-					{ range: '<85', score: 100 }
-				],
-				'Male HDL Cholesterol (mg/dL)': [
-					{ range: [50, 59], score: 90 },
-					{ range: [40, 49], score: 80 },
-					{ range: [30, 39], score: 60 },
-					{ range: '>60', score: 100 },
-					{ range: '<30', score: 40 }
-				],
-				'Female HDL Cholesterol (mg/dL)': [
-					{ range: [55, 59], score: 90 },
-					{ range: [45, 54], score: 80 },
-					{ range: [30, 44], score: 60 },
-					{ range: '>60', score: 100 },
-					{ range: '<30', score: 40 }
-				],
-				'Triglycerides (mg/dL)': [
-					{ range: [80, 99], score: 90 },
-					{ range: [100, 149], score: 80 },
-					{ range: [150, 199], score: 60 },
-					{ range: [200, 299], score: 40 },
-					{ range: '<80', score: 100 },
-					{ range: '>300', score: 20 }
-				],
-				// '25-Hydroxyvitamin D2 (nmol/L)': [
-				//   { range: [50, 150], score: 100 },
-				//   { range: '<50', score: 20 },
-				//   { range: '>150', score: 20 }
-				// ],
-				// '25-Hydroxyvitamin D3 (nmol/L)': [
-				//   { range: [50, 150], score: 100 },
-				//   { range: '<50', score: 20 },
-				//   { range: '>150', score: 20 }
-				// ]
+			// Use the shared score calculation function
+			const healthDataForScoring = {
+				UserID: userId,
+				fastingBloodGlucose: results[0].fastingBloodGlucose,
+				hdlCholesterol: results[0].hdlCholesterol,
+				triglycerides: results[0].triglycerides,
+				height: results[0].height,
+				weight: results[0].weight,
+				waistCircumference: results[0].waistCircumference,
+				bloodPressureSystolic: results[0].bloodPressureSystolic,
+				bloodPressureDiastolic: results[0].bloodPressureDiastolic
 			};
 
-			if (results0[0].sex == 'Other') { results0[0].sex = 'Male' }
+			const scoreResult = await calculateAndStoreUserScores(userId, healthDataForScoring);
 
-			const parameters = [
-
-				{ value: 'waistCircumference', label: 'Waist Circumference (cm)' },
-				{ value: 'bloodPressureSystolic', label: 'Blood Pressure (Systolic)' },
-				{ value: 'bloodPressureDiastolic', label: 'Blood Pressure (Diastolic)' },
-				{ value: 'fastingBloodGlucose', label: 'Fasting Blood Glucose (mg/dL)' },
-				{ value: 'hdlCholesterol', label: results0[0].sex + ' HDL Cholesterol (mg/dL)' },
-				{ value: 'triglycerides', label: 'Triglycerides (mg/dL)' }
-				// { value: 'vitaminD2', label: '25-Hydroxyvitamin D2 (nmol/L)' },
-				// { value: 'vitaminD3', label: '25-Hydroxyvitamin D3 (nmol/L)' }
-			];
-
-
-
-
-			function calcScore(value, table) {
-				for (const row of table) {
-					const { range, score } = row;
-
-					if (typeof range === 'string') {
-						if (range.startsWith('<') && value < parseFloat(range.slice(1))) {
-							return score;
-						}
-						if (range.startsWith('>') && value > parseFloat(range.slice(1))) {
-							return score;
-						}
-					} else if (Array.isArray(range) && value >= range[0] && value <= range[1]) {
-						return score;
-					}
-				}
-				return 0; // Return 0 if no range matched
-			}
-
-			function calculateTotalScore(parameterValues) {
-
-				let totalScore = 0;
-				let parameterScore = 0;
-				let parameterScoreJson = {};
-
-				for (const parameter of parameters) {
-					const label = parameter.label;
-					const value = parameterValues[label]; // Get the value for this parameter
-					const table = scoreTables[label]; // Get the corresponding score table
-
-					if (value !== undefined && table) {
-						parameterScore = calcScore(value, table);
-						totalScore += parameterScore;
-						parameterScoreJson[parameter.value] = parameterScore;
-					}
-				}
-				//breakdown.push(parameterScoreJson);
-
-				//recalculate waistCircumference to Waist2Height ratio
-
-				parameterScoreJson.waistCircumference = 100 - ((parseFloat(parameterValues['Waist Circumference (cm)']) - 0.4) / 0.3) * 100
-
-				//apply weighting to score
-				//Waist Circumference (Waist-to-Height Ratio)	30%
-				//Blood Pressure (Systolic & Diastolic)	20%
-				//HDL Cholesterol	15%
-				//Triglycerides	20%
-				//Fasting Blood Glucose	15%
-
-
-				parameterScoreJson['score'] = parseFloat(parameterScoreJson.waistCircumference) * 0.3
-					+ (parseFloat(parameterScoreJson.bloodPressureSystolic) + parseFloat(parameterScoreJson.bloodPressureDiastolic)) / 2 * 0.2
-					+ parseFloat(parameterScoreJson.fastingBloodGlucose) * 0.15
-					+ parseFloat(parameterScoreJson.hdlCholesterol) * 0.15
-					+ parseFloat(parameterScoreJson.triglycerides) * 0.2
-
-				parameterScoreJson['score'] = parameterScoreJson['score'].toFixed(2);
-
-
-				return parameterScoreJson
-			}
-
-			const parameterValues = {
-				// 'Height (cm)':                    Number(results[0].height),
-				// 'Weight (kg)':                    results[0].weight,
-				'Waist Circumference (cm)': results[0].waistCircumference / Number(results[0].height),  //waist height ratio
-				'Blood Pressure (Systolic)': results[0].bloodPressureSystolic,
-				'Blood Pressure (Diastolic)': results[0].bloodPressureDiastolic,
-				'Fasting Blood Glucose (mg/dL)': results[0].fastingBloodGlucose,
-				[results0[0].sex + ' HDL Cholesterol (mg/dL)']: results[0].hdlCholesterol,
-				'Triglycerides (mg/dL)': results[0].triglycerides,
-				// '25-Hydroxyvitamin D2 (nmol/L)':  results[0].vitaminD2,
-				// '25-Hydroxyvitamin D3 (nmol/L)':  results[0].vitaminD3
-			};
-
-			//console.log(parameterValues)
-
-			let totalScore = calculateTotalScore(parameterValues);
-
+			let totalScore = scoreResult.parameterScores;
 			totalScore.lastUpdate = results[0].lastUpdate;
 			totalScore.bmi = calculatedBMI;
-
 
 			//return dummy data
 			// console.log(totalScore)
@@ -1048,172 +896,25 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 		);
 
 		// Calculate and store biomarker scores after inserting health data
-		const [biomarkers] = await pool.execute(`SELECT id, name FROM biomarkers`);
-		let userScores = {};
-		let generalScore = 0;
-
-		// Get user sex
-		let sex = results0[0].Sex;
-		if (sex === 'Other') {
-			sex = 'Male';
-		}
-
-		// Define score tables and parameters
-		const scoreTables = {
-			'Waist Circumference (cm)': [
-				{ range: [0.4, 0.49], score: 90 },
-				{ range: [0.5, 0.54], score: 80 },
-				{ range: [0.55, 0.59], score: 50 },
-				{ range: [0.6, 0.69], score: 20 },
-				{ range: '<0.4', score: 100 },
-				{ range: '>0.7', score: 0 }
-			],
-			'Blood Pressure (Systolic)': [
-				{ range: [90, 120], score: 100 },
-				{ range: [121, 130], score: 90 },
-				{ range: [131, 140], score: 80 },
-				{ range: [141, 160], score: 60 },
-				{ range: '>160', score: 40 },
-				{ range: '<90', score: 70 }
-			],
-			'Blood Pressure (Diastolic)': [
-				{ range: [60, 80], score: 100 },
-				{ range: [81, 85], score: 90 },
-				{ range: [86, 90], score: 80 },
-				{ range: [91, 100], score: 60 },
-				{ range: '>100', score: 40 },
-				{ range: '<60', score: 70 }
-			],
-			'Fasting Blood Glucose (mg/dL)': [
-				{ range: [85, 89], score: 90 },
-				{ range: [90, 99], score: 80 },
-				{ range: [100, 109], score: 60 },
-				{ range: [110, 125], score: 40 },
-				{ range: '>126', score: 20 },
-				{ range: '<85', score: 100 }
-			],
-			'Male HDL Cholesterol (mg/dL)': [
-				{ range: [50, 59], score: 90 },
-				{ range: [40, 49], score: 80 },
-				{ range: [30, 39], score: 60 },
-				{ range: '>60', score: 100 },
-				{ range: '<30', score: 40 }
-			],
-			'Female HDL Cholesterol (mg/dL)': [
-				{ range: [55, 59], score: 90 },
-				{ range: [45, 54], score: 80 },
-				{ range: [30, 44], score: 60 },
-				{ range: '>60', score: 100 },
-				{ range: '<30', score: 40 }
-			],
-			'Triglycerides (mg/dL)': [
-				{ range: [80, 99], score: 90 },
-				{ range: [100, 149], score: 80 },
-				{ range: [150, 199], score: 60 },
-				{ range: [200, 299], score: 40 },
-				{ range: '<80', score: 100 },
-				{ range: '>300', score: 20 }
-			]
+		const healthDataForScoring = {
+			UserID,
+			fastingBloodGlucose: combinedData["Blood Glucose"].Value,
+			hdlCholesterol: combinedData["HDL Cholesterol"].Value,
+			triglycerides: combinedData["Triglycerides level"].Value,
+			height: results2[0].height,
+			weight: results2[0].weight,
+			waistCircumference: results2[0].waistCircumference,
+			bloodPressureSystolic: results2[0].bloodPressureSystolic,
+			bloodPressureDiastolic: results2[0].bloodPressureDiastolic
 		};
 
-		const parameters = [
-			{ value: 'waistCircumference', label: 'Waist Circumference (cm)' },
-			{ value: 'bloodPressureSystolic', label: 'Blood Pressure (Systolic)' },
-			{ value: 'bloodPressureDiastolic', label: 'Blood Pressure (Diastolic)' },
-			{ value: 'fastingBloodGlucose', label: 'Fasting Blood Glucose (mg/dL)' },
-			{ value: 'hdlCholesterol', label: sex + ' HDL Cholesterol (mg/dL)' },
-			{ value: 'triglycerides', label: 'Triglycerides (mg/dL)' }
-		];
-
-		function calcScore(value, table, label) {
-			if (label === 'Blood Pressure (Diastolic)' && value >= 81 && value <= 85) {
-				return 90 - (value - 81) * 2.673;
-			}
-			for (const row of table) {
-				const { range, score } = row;
-				if (typeof range === 'string') {
-					if (range.startsWith('<') && value < parseFloat(range.slice(1))) {
-						return score;
-					}
-					if (range.startsWith('>') && value > parseFloat(range.slice(1))) {
-						return score;
-					}
-				} else if (Array.isArray(range) && value >= range[0] && value <= range[1]) {
-					return score;
-				}
-			}
-			return 0;
-		}
-
-		for (const bio of biomarkers) {
-			let value = null;
-			let label = null;
-
-			// Map biomarker names to health_data columns and labels
-			switch(bio.name) {
-				case 'waistCircumference':
-					// Calculate Waist-to-Height Ratio for scoring
-					const waist = results2[0].waistCircumference;
-					const height = results2[0].height;
-					if (waist && height && height > 0) {
-						value = waist / height;
-					}
-					label = 'Waist Circumference (cm)';
-					break;
-				case 'bloodPressureSystolic':
-					value = results2[0].bloodPressureSystolic;
-					label = 'Blood Pressure (Systolic)';
-					break;
-				case 'bloodPressureDiastolic':
-					value = results2[0].bloodPressureDiastolic;
-					label = 'Blood Pressure (Diastolic)';
-					break;
-				case 'fastingBloodGlucose':
-					value = combinedData["Blood Glucose"].Value;
-					label = 'Fasting Blood Glucose (mg/dL)';
-					break;
-				case 'hdlCholesterol':
-					value = combinedData["HDL Cholesterol"].Value;
-					label = sex + ' HDL Cholesterol (mg/dL)';
-					break;
-				case 'triglycerides':
-					value = combinedData["Triglycerides level"].Value;
-					label = 'Triglycerides (mg/dL)';
-					break;
-			}
-
-			if (value !== undefined && value !== null && label) {
-				const table = scoreTables[label];
-				if (table) {
-					const score = calcScore(value, table, label);
-					userScores[bio.id] = score;
-					// Store in user_scores table
-					await pool.execute(
-						`INSERT INTO user_scores (user_id, biomarker_id, score) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE score = VALUES(score), calculated_at = CURRENT_TIMESTAMP`,
-						[UserID, bio.id, score]
-					);
-				}
-			}
-		}
-
-		// Calculate general health score
-		const waistScore = userScores[1] || 0; // waistCircumference (WHtR)
-		const bpScore = ((userScores[2] || 0) + (userScores[3] || 0)) / 2; // Average of systolic and diastolic
-		const hdlScore = userScores[5] || userScores[6] || 0; // HDL (male or female)
-		const trigScore = userScores[7] || 0; // Triglycerides
-		const fbgScore = userScores[4] || 0; // Fasting Blood Glucose
-		generalScore = (waistScore * 0.3) + (bpScore * 0.2) + (hdlScore * 0.15) + (trigScore * 0.2) + (fbgScore * 0.15);
-
-		// Update user's general health score
-		await pool.execute(
-			`UPDATE users SET general_health_score = ? WHERE UserID = ?`,
-			[generalScore, UserID]
-		);
+		// Use the shared score calculation function
+		const scoreResult = await calculateAndStoreUserScores(UserID, healthDataForScoring, combinedData);
 
 		// Automatically assign digital journey plan based on biomarker scores
-		console.log('Assigning digital journey plan for user:', UserID, 'with scores:', userScores);
+		console.log('Assigning digital journey plan for user:', UserID, 'with scores:', scoreResult.biomarkerScores);
 		try {
-			const planId = await assignDigitalPlanForUser(UserID, userScores);
+			const planId = await assignDigitalPlanForUser(UserID, scoreResult.biomarkerScores);
 			console.log('Digital journey plan assigned:', planId);
 		} catch (error) {
 			console.error('Error assigning digital journey plan:', error);
@@ -1221,9 +922,9 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 		}
 
 		// Automatically assign expertise types based on biomarker scores
-		console.log('Assigning expertise types for user:', UserID, 'with scores:', userScores);
+		console.log('Assigning expertise types for user:', UserID, 'with scores:', scoreResult.biomarkerScores);
 		try {
-			const expertiseTypes = await assignExpertiseTypesForUser(UserID, userScores);
+			const expertiseTypes = await assignExpertiseTypesForUser(UserID, scoreResult.biomarkerScores);
 			console.log('Expertise types assigned:', expertiseTypes);
 		} catch (error) {
 			console.error('Error assigning expertise types:', error);
@@ -1236,8 +937,8 @@ app.post('/import-file', verifyToken, upload.single('file'), async (req, res) =>
 			filePath,
 			//ocrText: ocrText ? ocrText.substring(0, 100) + '...' : null // Send a preview of OCR text
 			ocrText: JSON.stringify(combinedData),
-			generalHealthScore: generalScore,
-			biomarkerScores: userScores
+			generalHealthScore: scoreResult.centralHealthScore,
+			biomarkerScores: scoreResult.biomarkerScores
 		});
 	} catch (error) {
 		console.error('Error uploading file:', error);
